@@ -1,0 +1,203 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   FONT DECLARATIONS — Task Turtle
+   ============================================================ */
+
+@font-face {
+  font-family: "Cabinet Grotesk";
+  src: url("/assets/fonts/CabinetGrotesk-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Sora";
+  src: url("/assets/fonts/Sora-Variable.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/assets/fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ============================================================
+   DESIGN TOKENS — Task Turtle: Deep Black + Vivid Green
+   ============================================================ */
+
+@layer base {
+  :root {
+    --radius: 1rem;
+
+    /* ---- Core palette (dark-first — this app is always dark) ---- */
+    /* Deep black backgrounds */
+    --background:       0.08 0 0;
+    --foreground:       0.96 0 0;
+
+    /* Card surfaces — dark charcoal */
+    --card:             0.12 0 0;
+    --card-foreground:  0.96 0 0;
+
+    /* Popover */
+    --popover:          0.14 0 0;
+    --popover-foreground: 0.96 0 0;
+
+    /* Primary — vivid Task Turtle green */
+    --primary:          0.72 0.22 145;
+    --primary-foreground: 0.06 0 0;
+
+    /* Secondary — muted dark surface */
+    --secondary:        0.16 0 0;
+    --secondary-foreground: 0.96 0 0;
+
+    /* Muted */
+    --muted:            0.18 0 0;
+    --muted-foreground: 0.58 0 0;
+
+    /* Accent — bright green highlight */
+    --accent:           0.72 0.22 145;
+    --accent-foreground: 0.06 0 0;
+
+    /* Destructive — bright red */
+    --destructive:      0.60 0.22 22;
+    --destructive-foreground: 0.96 0 0;
+
+    /* Borders / inputs */
+    --border:           0.22 0 0;
+    --input:            0.20 0 0;
+    --ring:             0.72 0.22 145;
+
+    /* Charts */
+    --chart-1: 0.72 0.22 145;
+    --chart-2: 0.60 0.22 22;
+    --chart-3: 0.70 0.18 55;
+    --chart-4: 0.60 0.18 220;
+    --chart-5: 0.75 0.14 300;
+
+    /* Sidebar */
+    --sidebar:                  0.10 0 0;
+    --sidebar-foreground:       0.96 0 0;
+    --sidebar-primary:          0.72 0.22 145;
+    --sidebar-primary-foreground: 0.06 0 0;
+    --sidebar-accent:           0.18 0 0;
+    --sidebar-accent-foreground: 0.96 0 0;
+    --sidebar-border:           0.22 0 0;
+    --sidebar-ring:             0.72 0.22 145;
+
+    /* Custom brand tokens */
+    --green-glow: oklch(0.72 0.22 145 / 0.35);
+    --green-glow-sm: oklch(0.72 0.22 145 / 0.18);
+    --green-vivid: oklch(0.72 0.22 145);
+    --green-dim: oklch(0.55 0.18 145);
+    --green-ultra: oklch(0.80 0.24 145);
+    --surface-1: oklch(0.10 0 0);
+    --surface-2: oklch(0.13 0 0);
+    --surface-3: oklch(0.17 0 0);
+  }
+
+  /* Force dark — this app doesn't have a light mode */
+  html {
+    color-scheme: dark;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Sora", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: oklch(0.10 0 0);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.25 0 0);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.72 0.22 145 / 0.6);
+  }
+}
+
+/* ============================================================
+   UTILITY CLASSES
+   ============================================================ */
+
+@layer utilities {
+  .font-display {
+    font-family: "Cabinet Grotesk", sans-serif;
+  }
+
+  .font-mono {
+    font-family: "Geist Mono", monospace;
+  }
+
+  /* Green glow shadow */
+  .glow-green {
+    box-shadow: 0 0 20px var(--green-glow), 0 0 40px oklch(0.72 0.22 145 / 0.1);
+  }
+
+  .glow-green-sm {
+    box-shadow: 0 0 10px var(--green-glow-sm);
+  }
+
+  /* Glassmorphism card */
+  .glass-card {
+    background: oklch(0.13 0 0 / 0.8);
+    backdrop-filter: blur(16px);
+    border: 1px solid oklch(0.25 0 0);
+  }
+
+  /* Gradient border */
+  .border-green-gradient {
+    border: 1px solid oklch(0.72 0.22 145 / 0.4);
+  }
+
+  /* Text gradient */
+  .text-green-gradient {
+    background: linear-gradient(135deg, oklch(0.80 0.24 145), oklch(0.60 0.20 145));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Mesh gradient background */
+  .bg-mesh {
+    background:
+      radial-gradient(ellipse at 20% 20%, oklch(0.72 0.22 145 / 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, oklch(0.72 0.22 145 / 0.05) 0%, transparent 50%),
+      oklch(0.08 0 0);
+  }
+
+  /* Surface elevations */
+  .surface-1 { background: var(--surface-1); }
+  .surface-2 { background: var(--surface-2); }
+  .surface-3 { background: var(--surface-3); }
+
+  /* OTP monospace display */
+  .otp-display {
+    font-family: "Geist Mono", monospace;
+    letter-spacing: 0.3em;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--green-vivid);
+    text-shadow: 0 0 20px var(--green-glow);
+  }
+}
