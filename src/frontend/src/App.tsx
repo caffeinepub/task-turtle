@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import Navbar from "./components/Navbar";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
+import { useEnsureProfile } from "./hooks/useQueries";
 import Dashboard from "./pages/Dashboard";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
@@ -38,11 +39,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// ─── Profile bootstrap — silently registers user on first login ───────────────
+
+function ProfileBootstrap() {
+  useEnsureProfile();
+  return null;
+}
+
 // ─── App layout wrapper for protected pages ───────────────────────────────────
 
 function AppLayout() {
   return (
     <div className="min-h-screen bg-background bg-mesh">
+      <ProfileBootstrap />
       <Navbar />
       <main>
         <Outlet />

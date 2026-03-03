@@ -2,6 +2,40 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { PublicUserProfile, Task } from "../backend.d";
 import { useActor } from "./useActor";
+import { useInternetIdentity } from "./useInternetIdentity";
+
+function checkAuthenticated(
+  identity: ReturnType<typeof useInternetIdentity>["identity"],
+) {
+  if (!identity || identity.getPrincipal().isAnonymous()) {
+    throw new Error("Please login to continue");
+  }
+}
+
+// ─── Auto-register profile on first login ────────────────────────────────────
+// This ensures the backend `#user` permission check passes for all operations.
+
+export function useEnsureProfile() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["ensure-profile"],
+    queryFn: async () => {
+      if (!actor) return null;
+      try {
+        const existing = await actor.getCallerUserProfile();
+        if (!existing) {
+          await actor.updateProfile("New User", null, "", false);
+        }
+        return true;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!actor && !isFetching,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: 2,
+  });
+}
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
@@ -19,6 +53,7 @@ export function useProfile() {
 
 export function useUpdateProfile() {
   const { actor } = useActor();
+  const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -32,6 +67,7 @@ export function useUpdateProfile() {
       location: string;
       isAvailableAsTasker: boolean;
     }) => {
+      checkAuthenticated(identity);
       if (!actor) throw new Error("Not connected");
       return actor.updateProfile(name, phone, location, isAvailableAsTasker);
     },
@@ -87,6 +123,7 @@ export function useMyPostedTasks() {
 
 export function useCreateTask() {
   const { actor } = useActor();
+  const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -104,6 +141,7 @@ export function useCreateTask() {
       customerLocation: string;
       storeLocation: string;
     }) => {
+      checkAuthenticated(identity);
       if (!actor) throw new Error("Not connected");
       return actor.createTask(
         title,
@@ -116,6 +154,7 @@ export function useCreateTask() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-posted-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["available-tasks"] });
       toast.success("Task posted successfully!");
     },
     onError: (err: Error) => {
@@ -126,9 +165,11 @@ export function useCreateTask() {
 
 export function useCancelTask() {
   const { actor } = useActor();
+  const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (taskId: bigint) => {
+      checkAuthenticated(identity);
       if (!actor) throw new Error("Not connected");
       const result = await actor.cancelTask(taskId);
       if (result.__kind__ === "err") throw new Error(result.err);
@@ -154,8 +195,9 @@ export function useAvailableTasks() {
       if (!actor) return [];
       return actor.getAvailableTasks();
     },
+    // Always enabled once actor is ready — getAvailableTasks is public
     enabled: !!actor && !isFetching,
-    refetchInterval: 15000, // Poll every 15s for new tasks
+    refetchInterval: 10000, // Poll every 10s so new tasks appear quickly
   });
 }
 
@@ -174,9 +216,11 @@ export function useMyAcceptedTasks() {
 
 export function useAcceptTask() {
   const { actor } = useActor();
+  const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (taskId: bigint) => {
+      checkAuthenticated(identity);
       if (!actor) throw new Error("Not connected");
       const result = await actor.acceptTask(taskId);
       if (result.__kind__ === "err") throw new Error(result.err);
@@ -195,9 +239,11 @@ export function useAcceptTask() {
 
 export function useMarkInProgress() {
   const { actor } = useActor();
+  const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (taskId: bigint) => {
+      checkAuthenticated(identity);
       if (!actor) throw new Error("Not connected");
       const result = await actor.markTaskInProgress(taskId);
       if (result.__kind__ === "err") throw new Error(result.err);
@@ -215,9 +261,11 @@ export function useMarkInProgress() {
 
 export function useMarkDelivered() {
   const { actor } = useActor();
+  const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (taskId: bigint) => {
+      checkAuthenticated(identity);
       if (!actor) throw new Error("Not connected");
       const result = await actor.markTaskDelivered(taskId);
       if (result.__kind__ === "err") throw new Error(result.err);
@@ -235,9 +283,11 @@ export function useMarkDelivered() {
 
 export function useVerifyOtp() {
   const { actor } = useActor();
+  const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ taskId, otp }: { taskId: bigint; otp: bigint }) => {
+      checkAuthenticated(identity);
       if (!actor) throw new Error("Not connected");
       const result = await actor.verifyOtp(taskId, otp);
       if (!result) throw new Error("Invalid OTP. Please try again.");

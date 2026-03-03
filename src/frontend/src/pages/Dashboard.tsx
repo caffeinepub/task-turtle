@@ -6,27 +6,37 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useNavigate } from "@tanstack/react-router";
 import {
+  AlertTriangle,
+  CheckCircle2,
   ClipboardList,
+  ExternalLink,
   IndianRupee,
   KeyRound,
   Loader2,
+  LogIn,
   MapPin,
   PlusCircle,
   RefreshCw,
   Store,
   X,
+  Zap,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { TaskStatus } from "../backend.d";
+import type { Task } from "../backend.d";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
+  useAcceptTask,
+  useAvailableTasks,
   useCancelTask,
   useCreateTask,
   useMyPostedTasks,
 } from "../hooks/useQueries";
-import { formatINR, inrToPaise } from "../utils/format";
+import { formatINR, formatTimestamp, inrToPaise } from "../utils/format";
 
 function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
   const [title, setTitle] = useState("");
@@ -37,9 +47,19 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
   const [tipINR, setTipINR] = useState("");
 
   const createTask = useCreateTask();
+  const { identity, login, isLoggingIn } = useInternetIdentity();
+  const navigate = useNavigate();
+
+  const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isAuthenticated) {
+      login();
+      return;
+    }
+
     if (
       !title ||
       !description ||
@@ -70,6 +90,36 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Login warning banner — shown when not authenticated */}
+      {!isAuthenticated && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          data-ocid="dashboard.login_warning_card"
+          className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4"
+        >
+          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-300">
+              Login required to post tasks
+            </p>
+            <p className="text-xs text-amber-300/70 mt-0.5">
+              You must be logged in to post a task and lock funds in escrow.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            data-ocid="dashboard.login_warning.login_button"
+            onClick={() => navigate({ to: "/login" })}
+            className="flex-shrink-0 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl text-xs px-3 py-2 h-auto"
+          >
+            <LogIn className="w-3.5 h-3.5 mr-1.5" />
+            Login
+          </Button>
+        </motion.div>
+      )}
+
       <div className="space-y-2">
         <Label
           htmlFor="task-title"
@@ -229,13 +279,27 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
         type="submit"
         size="lg"
         data-ocid="dashboard.task_submit_button"
-        disabled={createTask.isPending}
-        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold py-6 shadow-green-sm hover:shadow-green-md transition-all rounded-2xl"
+        disabled={createTask.isPending || isLoggingIn}
+        className={`w-full font-bold py-6 transition-all rounded-2xl ${
+          !isAuthenticated
+            ? "bg-amber-500 hover:bg-amber-400 text-black shadow-none"
+            : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-green-sm hover:shadow-green-md"
+        }`}
       >
-        {createTask.isPending ? (
+        {isLoggingIn ? (
+          <>
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            Logging in…
+          </>
+        ) : createTask.isPending ? (
           <>
             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
             Posting Task…
+          </>
+        ) : !isAuthenticated ? (
+          <>
+            <LogIn className="w-5 h-5 mr-2" />
+            Login to Post Task
           </>
         ) : (
           <>
@@ -348,9 +412,113 @@ function TaskCard({
   );
 }
 
+function FindTaskCard({ task, index }: { task: Task; index: number }) {
+  const acceptTask = useAcceptTask();
+  const navigate = useNavigate();
+
+  const total = task.amount + (task.tip ?? 0n);
+
+  const handleAccept = () => {
+    acceptTask.mutate(task.id, {
+      onSuccess: () => {
+        navigate({ to: "/tasker" });
+      },
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.06 }}
+      data-ocid={`dashboard.find_task_item.${index + 1}`}
+      className="glass-card rounded-2xl p-5 border-border hover:border-green-vivid/25 hover:shadow-green-sm transition-all duration-300 space-y-4"
+    >
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-foreground">{task.title}</h3>
+          <p className="text-muted-foreground text-sm mt-0.5 line-clamp-2">
+            {task.description}
+          </p>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <p className="font-display font-black text-xl text-green-vivid">
+            {formatINR(total)}
+          </p>
+          {task.tip && task.tip > 0n && (
+            <p className="text-xs text-muted-foreground">
+              incl.&nbsp;{formatINR(task.tip)} tip
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Locations */}
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Store className="w-3.5 h-3.5 text-green-vivid flex-shrink-0" />
+          <span className="truncate font-medium text-foreground">
+            {task.storeLocation}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <MapPin className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+          <span className="truncate">{task.customerLocation}</span>
+        </div>
+      </div>
+
+      {/* Amount breakdown + posted time */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          Base:&nbsp;
+          <span className="text-foreground font-medium">
+            {formatINR(task.amount)}
+          </span>
+          {task.tip && task.tip > 0n && (
+            <>
+              &nbsp;+&nbsp;
+              <span className="text-green-vivid font-semibold">
+                {formatINR(task.tip)} tip
+              </span>
+            </>
+          )}
+        </span>
+        {task.createdAt && (
+          <span>Posted&nbsp;{formatTimestamp(task.createdAt)}</span>
+        )}
+      </div>
+
+      {/* Accept button */}
+      <Button
+        size="sm"
+        data-ocid={`dashboard.find_task.accept_button.${index + 1}`}
+        onClick={handleAccept}
+        disabled={acceptTask.isPending}
+        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-green-sm rounded-xl py-5"
+      >
+        {acceptTask.isPending ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <>
+            <CheckCircle2 className="w-4 h-4 mr-2" />
+            Accept &amp; Earn
+          </>
+        )}
+      </Button>
+    </motion.div>
+  );
+}
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("my-tasks");
   const { data: tasks = [], isLoading, refetch } = useMyPostedTasks();
+  const {
+    data: availableTasks = [],
+    isLoading: loadingAvailable,
+    refetch: refetchAvailable,
+  } = useAvailableTasks();
+  const navigate = useNavigate();
 
   const switchToMyTasks = () => setActiveTab("my-tasks");
 
@@ -392,6 +560,19 @@ export default function Dashboard() {
           >
             <PlusCircle className="w-4 h-4 mr-2 inline" />
             Post Task
+          </TabsTrigger>
+          <TabsTrigger
+            value="find-tasks"
+            data-ocid="dashboard.find_tasks_tab"
+            className="flex-1 rounded-xl py-3 font-semibold data-[state=active]:bg-background data-[state=active]:text-green-vivid data-[state=active]:shadow-green-sm transition-all"
+          >
+            <Zap className="w-4 h-4 mr-2 inline" />
+            Find Tasks
+            {availableTasks.length > 0 && (
+              <Badge className="ml-2 bg-green-surface text-green-vivid border-0 text-xs px-1.5">
+                {availableTasks.length}
+              </Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -458,6 +639,82 @@ export default function Dashboard() {
               <PostTaskForm onSuccess={switchToMyTasks} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Find Tasks */}
+        <TabsContent value="find-tasks">
+          {/* Info banner */}
+          <div className="flex items-start gap-3 bg-green-surface/30 border border-green-vivid/20 rounded-2xl p-4 mb-6">
+            <Zap className="w-5 h-5 text-green-vivid flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                Earn money by completing tasks near you
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Accept tasks posted by others. Manage accepted tasks in{" "}
+                <button
+                  type="button"
+                  onClick={() => navigate({ to: "/tasker" })}
+                  className="text-green-vivid hover:underline font-semibold inline-flex items-center gap-0.5"
+                >
+                  Tasker Hub
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              </p>
+            </div>
+          </div>
+
+          {/* Header + Refresh */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-lg">Available Tasks Near You</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refetchAvailable()}
+              className="text-muted-foreground hover:text-green-vivid gap-2"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Refresh
+            </Button>
+          </div>
+
+          {/* Loading skeletons */}
+          {loadingAvailable ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-48 rounded-2xl bg-secondary" />
+              ))}
+            </div>
+          ) : availableTasks.length === 0 ? (
+            /* Empty state */
+            <div
+              data-ocid="dashboard.find_tasks.empty_state"
+              className="glass-card rounded-2xl p-12 text-center border-border"
+            >
+              <div className="text-5xl mb-4">🔍</div>
+              <h3 className="font-semibold text-lg mb-2">No tasks available</h3>
+              <p className="text-muted-foreground text-sm mb-5">
+                No tasks are posted right now. Check back soon — tasks refresh
+                every 15 seconds.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchAvailable()}
+                className="border-border hover:border-green-vivid/40 hover:text-green-vivid rounded-xl gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Refresh now
+              </Button>
+            </div>
+          ) : (
+            /* Task list */
+            <div className="space-y-4">
+              {availableTasks.map((task, i) => (
+                <FindTaskCard key={String(task.id)} task={task} index={i} />
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
