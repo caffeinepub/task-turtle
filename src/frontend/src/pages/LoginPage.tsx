@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Loader2, Lock, Shield, Zap } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect } from "react";
+import logoImg from "../../public/assets/generated/task-turtle-logo-transparent.dim_200x200.png";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 export default function LoginPage() {
@@ -32,7 +33,7 @@ export default function LoginPage() {
         >
           <Link to="/" className="inline-flex flex-col items-center gap-3">
             <img
-              src="/assets/generated/task-turtle-logo-transparent.dim_200x200.png"
+              src={logoImg}
               alt="Task Turtle"
               className="w-20 h-20 object-contain animate-float"
             />

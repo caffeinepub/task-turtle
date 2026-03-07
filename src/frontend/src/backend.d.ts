@@ -32,8 +32,10 @@ export interface Task {
     title: string;
     otpCode: bigint;
     customerLocation: string;
+    taskerRating?: bigint;
     otpVerified: boolean;
     createdAt: bigint;
+    customerRating?: bigint;
     description: string;
     taskerId?: Principal;
     storeLocation: string;
@@ -120,6 +122,7 @@ export interface backendInterface {
     getMyAcceptedTasks(): Promise<Array<Task>>;
     getMyPostedTasks(): Promise<Array<Task>>;
     getPlatformStats(): Promise<TaskStats>;
+    getRatingCount(user: Principal): Promise<bigint>;
     getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
     getTaskById(id: bigint): Promise<TaskResult>;
     getUserProfile(user: Principal): Promise<PublicUserProfile>;
@@ -128,6 +131,7 @@ export interface backendInterface {
     isStripeConfigured(): Promise<boolean>;
     markTaskDelivered(taskId: bigint): Promise<TaskResult>;
     markTaskInProgress(taskId: bigint): Promise<TaskResult>;
+    rateTask(taskId: bigint, stars: bigint): Promise<boolean>;
     saveCallerUserProfile(profile: PublicUserProfile): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;

@@ -17,6 +17,7 @@ import {
   Loader2,
   LogIn,
   MapPin,
+  Phone,
   PlusCircle,
   RefreshCw,
   Store,
@@ -27,7 +28,10 @@ import { motion } from "motion/react";
 import { useState } from "react";
 import { TaskStatus } from "../backend.d";
 import type { Task } from "../backend.d";
+import { StarRating } from "../components/StarRating";
+import { TaskProgressTimeline } from "../components/TaskProgressTimeline";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
+import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
   useAcceptTask,
@@ -35,8 +39,17 @@ import {
   useCancelTask,
   useCreateTask,
   useMyPostedTasks,
+  useRateTask,
 } from "../hooks/useQueries";
 import { formatINR, formatTimestamp, inrToPaise } from "../utils/format";
+
+function parseStoreLocation(raw: string): {
+  store: string;
+  contact: string | null;
+} {
+  const parts = raw.split("|||CONTACT:");
+  return { store: parts[0], contact: parts[1] ?? null };
+}
 
 function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
   const [title, setTitle] = useState("");
@@ -45,12 +58,19 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
   const [storeLocation, setStoreLocation] = useState("");
   const [amountINR, setAmountINR] = useState("");
   const [tipINR, setTipINR] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
 
   const createTask = useCreateTask();
-  const { identity, login, isLoggingIn } = useInternetIdentity();
+  const { identity, login, isLoggingIn, isInitializing } =
+    useInternetIdentity();
+  const { isFetching: isActorFetching } = useActor();
   const navigate = useNavigate();
 
   const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
+  // Show connecting spinner while auth or actor is initializing
+  const isConnecting = isInitializing || isActorFetching;
+  // Never show "connection failed" — backend failures are handled gracefully in mutations
+  const isConnectionFailed = false;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,13 +89,17 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
     )
       return;
 
+    const encodedStoreLocation = contactNumber.trim()
+      ? `${storeLocation}|||CONTACT:${contactNumber.trim()}`
+      : storeLocation;
+
     await createTask.mutateAsync({
       title,
       description,
       amount: inrToPaise(Number.parseFloat(amountINR)),
       tip: tipINR ? inrToPaise(Number.parseFloat(tipINR)) : null,
       customerLocation,
-      storeLocation,
+      storeLocation: encodedStoreLocation,
     });
 
     // Reset
@@ -85,13 +109,66 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
     setStoreLocation("");
     setAmountINR("");
     setTipINR("");
+    setContactNumber("");
     onSuccess();
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Login warning banner — shown when not authenticated */}
-      {!isAuthenticated && (
+      {/*
+        Banner priority (only one shows at a time):
+        1. Connecting spinner  — backend is initializing AND user is authenticated (or still resolving identity)
+        2. Connection failed   — resolved but actor missing AND user IS authenticated
+        3. Login required      — not connecting, not authenticated (anonymous users see this, NOT the spinner)
+      */}
+
+      {/* 1. Connecting banner — only while initializing, hidden once timed-out for anon users */}
+      {isConnecting && !isConnectionFailed && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          data-ocid="dashboard.connecting_card"
+          className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4"
+        >
+          <Loader2 className="w-5 h-5 text-blue-400 flex-shrink-0 animate-spin" />
+          <p className="text-sm font-semibold text-blue-300">
+            Connecting to backend…
+          </p>
+        </motion.div>
+      )}
+
+      {/* 2. Connection failed banner — actor never loaded despite being logged in */}
+      {isConnectionFailed && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          data-ocid="dashboard.connection_failed_card"
+          className="flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-2xl p-4"
+        >
+          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-red-300">
+              Connection to backend failed
+            </p>
+            <p className="text-xs text-red-300/70 mt-0.5">
+              Could not reach the canister. Click Refresh to try again.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            data-ocid="dashboard.connection_failed.retry_button"
+            onClick={() => window.location.reload()}
+            className="flex-shrink-0 bg-red-500 hover:bg-red-400 text-white font-bold rounded-xl text-xs px-3 py-2 h-auto"
+          >
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            Refresh
+          </Button>
+        </motion.div>
+      )}
+
+      {/* 3. Login required banner — shown only to unauthenticated users once connecting resolves/times-out */}
+      {!isConnecting && !isConnectionFailed && !isAuthenticated && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -194,6 +271,30 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
         </div>
       </div>
 
+      {/* Contact Number */}
+      <div className="space-y-2">
+        <Label
+          htmlFor="contact-number"
+          className="text-sm font-semibold text-foreground"
+        >
+          <Phone className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
+          Contact Number{" "}
+          <span className="text-muted-foreground font-normal">— optional</span>
+        </Label>
+        <Input
+          id="contact-number"
+          data-ocid="dashboard.contact_number_input"
+          type="tel"
+          placeholder="e.g., +91 98765 43210"
+          value={contactNumber}
+          onChange={(e) => setContactNumber(e.target.value)}
+          className="bg-secondary border-border focus:border-green-vivid/50 focus:ring-green-vivid/20 rounded-xl h-12"
+        />
+        <p className="text-xs text-muted-foreground">
+          Tasker can call you during delivery to coordinate the drop-off
+        </p>
+      </div>
+
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label
@@ -279,14 +380,21 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
         type="submit"
         size="lg"
         data-ocid="dashboard.task_submit_button"
-        disabled={createTask.isPending || isLoggingIn}
+        disabled={createTask.isPending || isLoggingIn || isConnecting}
         className={`w-full font-bold py-6 transition-all rounded-2xl ${
-          !isAuthenticated
-            ? "bg-amber-500 hover:bg-amber-400 text-black shadow-none"
-            : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-green-sm hover:shadow-green-md"
+          isConnecting
+            ? "bg-secondary text-muted-foreground cursor-wait"
+            : !isAuthenticated
+              ? "bg-amber-500 hover:bg-amber-400 text-black shadow-none"
+              : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-green-sm hover:shadow-green-md"
         }`}
       >
-        {isLoggingIn ? (
+        {isConnecting ? (
+          <>
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            Connecting…
+          </>
+        ) : isLoggingIn ? (
           <>
             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
             Logging in…
@@ -317,7 +425,18 @@ function TaskCard({
   index,
 }: { task: import("../backend.d").Task; index: number }) {
   const cancelTask = useCancelTask();
+  const rateTask = useRateTask();
+  const [selectedRating, setSelectedRating] = useState(0);
   const isDelivered = task.status === TaskStatus.delivered;
+  const isCompleted = task.status === TaskStatus.completed;
+  const parsed = parseStoreLocation(task.storeLocation);
+
+  const hasRated = task.customerRating != null && task.customerRating > 0n;
+
+  const handleRate = async (stars: number) => {
+    setSelectedRating(stars);
+    await rateTask.mutateAsync({ taskId: task.id, stars: BigInt(stars) });
+  };
 
   return (
     <motion.div
@@ -344,12 +463,20 @@ function TaskCard({
       <div className="space-y-1.5">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Store className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">{task.storeLocation}</span>
+          <span className="truncate">{parsed.store}</span>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
           <span className="truncate">{task.customerLocation}</span>
         </div>
+        {parsed.contact && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Phone className="w-3.5 h-3.5 flex-shrink-0 text-green-vivid" />
+            <span className="text-foreground font-medium">
+              Your Contact: {parsed.contact}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Amounts */}
@@ -368,13 +495,13 @@ function TaskCard({
         )}
       </div>
 
-      {/* OTP — shown prominently when delivered */}
+      {/* OTP — shown prominently when tasker has marked as delivered */}
       {isDelivered && (
-        <div className="bg-purple-400/10 border border-purple-400/30 rounded-xl p-4 text-center">
-          <div className="flex items-center gap-2 justify-center mb-2">
+        <div className="bg-purple-400/10 border border-purple-400/30 rounded-xl p-4 text-center space-y-2">
+          <div className="flex items-center gap-2 justify-center">
             <KeyRound className="w-4 h-4 text-purple-400" />
             <p className="text-sm font-semibold text-purple-400">
-              Share this OTP with tasker
+              Tasker is here! Share this OTP
             </p>
           </div>
           <div
@@ -386,8 +513,60 @@ function TaskCard({
           >
             {String(task.otpCode).padStart(6, "0")}
           </div>
+          <p className="text-xs text-purple-400/70 leading-relaxed">
+            Read this code out loud to the tasker.
+            <br />
+            They will enter it to confirm delivery and release payment.
+          </p>
         </div>
       )}
+
+      {/* Rating — shown after task is completed */}
+      {isCompleted && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-yellow-400/8 border border-yellow-400/25 rounded-xl p-4 space-y-2"
+        >
+          {hasRated ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">
+                Your rating:
+              </span>
+              <StarRating
+                value={Number(task.customerRating)}
+                readonly
+                size="sm"
+              />
+              <span className="text-sm text-muted-foreground">
+                {Number(task.customerRating)}/5
+              </span>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-foreground">
+                Rate your Tasker
+              </p>
+              <p className="text-xs text-muted-foreground">
+                How was your experience? Your feedback helps the community.
+              </p>
+              <div className="flex items-center gap-3">
+                <StarRating
+                  value={selectedRating}
+                  onChange={handleRate}
+                  size="md"
+                />
+                {rateTask.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+            </>
+          )}
+        </motion.div>
+      )}
+
+      {/* Progress Timeline — shown once accepted */}
+      <TaskProgressTimeline task={task} />
 
       {/* Cancel button — only for posted tasks */}
       {task.status === TaskStatus.posted && (
@@ -415,6 +594,7 @@ function TaskCard({
 function FindTaskCard({ task, index }: { task: Task; index: number }) {
   const acceptTask = useAcceptTask();
   const navigate = useNavigate();
+  const parsed = parseStoreLocation(task.storeLocation);
 
   const total = task.amount + (task.tip ?? 0n);
 
@@ -459,13 +639,23 @@ function FindTaskCard({ task, index }: { task: Task; index: number }) {
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Store className="w-3.5 h-3.5 text-green-vivid flex-shrink-0" />
           <span className="truncate font-medium text-foreground">
-            {task.storeLocation}
+            {parsed.store}
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <MapPin className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
           <span className="truncate">{task.customerLocation}</span>
         </div>
+        {parsed.contact && (
+          <a
+            href={`tel:${parsed.contact}`}
+            data-ocid={`dashboard.find_task.call_button.${index + 1}`}
+            className="inline-flex items-center gap-1.5 bg-green-surface text-green-vivid text-xs font-semibold px-3 py-1.5 rounded-full border border-green-vivid/30 hover:bg-green-vivid hover:text-black transition-all duration-200 mt-0.5"
+          >
+            <Phone className="w-3 h-3" />
+            Call Customer: {parsed.contact}
+          </a>
+        )}
       </div>
 
       {/* Amount breakdown + posted time */}
@@ -512,7 +702,11 @@ function FindTaskCard({ task, index }: { task: Task; index: number }) {
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("my-tasks");
-  const { data: tasks = [], isLoading, refetch } = useMyPostedTasks();
+  const {
+    data: tasks = [],
+    isLoading,
+    refetch,
+  } = useMyPostedTasks({ refetchInterval: 15000 });
   const {
     data: availableTasks = [],
     isLoading: loadingAvailable,

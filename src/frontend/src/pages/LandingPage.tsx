@@ -15,8 +15,31 @@ import {
   Star,
   Zap,
 } from "lucide-react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useState } from "react";
+import slider1 from "../../public/assets/generated/slider-1.dim_800x500.jpg";
+import slider2 from "../../public/assets/generated/slider-2.dim_800x500.jpg";
+import slider3 from "../../public/assets/generated/slider-3.dim_800x500.jpg";
+import logoImg from "../../public/assets/generated/task-turtle-logo-transparent.dim_200x200.png";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+
+const sliderImages = [
+  {
+    src: slider1,
+    caption: "Grocery Pickup • ₹249 + ₹20 tip",
+    id: "slide-grocery",
+  },
+  {
+    src: slider2,
+    caption: "Pharmacy Run • ₹150 + ₹15 tip",
+    id: "slide-pharmacy",
+  },
+  {
+    src: slider3,
+    caption: "Local Courier • ₹200 + ₹25 tip",
+    id: "slide-courier",
+  },
+];
 
 const steps = [
   {
@@ -108,6 +131,95 @@ const whyItems = [
   },
 ];
 
+function HeroSlider() {
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrent((prev) => (prev + 1) % sliderImages.length);
+    }, 1800);
+    return () => clearInterval(timer);
+  }, []);
+
+  const slide = sliderImages[current];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9, x: 40 }}
+      animate={{ opacity: 1, scale: 1, x: 0 }}
+      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+      className="relative"
+    >
+      <div
+        className="relative rounded-3xl overflow-hidden shadow-green-lg border border-green-vivid/20"
+        style={{ minHeight: 340 }}
+      >
+        <AnimatePresence mode="wait">
+          <motion.img
+            key={current}
+            src={slide.src}
+            alt={`Task Turtle slide ${current + 1}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6 }}
+            className="w-full object-cover"
+            style={{ minHeight: 340, maxHeight: 480 }}
+          />
+        </AnimatePresence>
+
+        {/* Overlay card */}
+        <div className="absolute bottom-6 left-6 right-6 glass-card rounded-2xl p-4 border-green-gradient z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-green-surface flex items-center justify-center flex-shrink-0">
+              <CheckCircle2 className="w-5 h-5 text-green-vivid" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Task Delivered!
+              </p>
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={current}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.35 }}
+                  className="text-xs text-muted-foreground"
+                >
+                  {slide.caption}
+                </motion.p>
+              </AnimatePresence>
+            </div>
+            <div className="ml-auto">
+              <Badge className="bg-green-surface text-green-vivid border-0 text-xs">
+                Live
+              </Badge>
+            </div>
+          </div>
+        </div>
+
+        {/* Dot indicators */}
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
+          {sliderImages.map((slide, i) => (
+            <button
+              key={slide.id}
+              type="button"
+              onClick={() => setCurrent(i)}
+              className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                i === current
+                  ? "bg-green-vivid w-5"
+                  : "bg-white/40 hover:bg-white/70"
+              }`}
+              aria-label={`Slide ${i + 1}`}
+            />
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 const fadeInUp = {
   hidden: { opacity: 0, y: 24 },
   visible: { opacity: 1, y: 0 },
@@ -120,7 +232,6 @@ const stagger = {
 export default function LandingPage() {
   const navigate = useNavigate();
   const { identity, login, isLoggingIn } = useInternetIdentity();
-
   const handlePostTask = () => {
     if (identity) {
       navigate({ to: "/dashboard" });
@@ -136,7 +247,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
             <img
-              src="/assets/generated/task-turtle-logo-transparent.dim_200x200.png"
+              src={logoImg}
               alt="Task Turtle"
               className="w-9 h-9 object-contain"
             />
@@ -270,42 +381,8 @@ export default function LandingPage() {
             </motion.div>
           </motion.div>
 
-          {/* Right: hero image */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, x: 40 }}
-            animate={{ opacity: 1, scale: 1, x: 0 }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="relative"
-          >
-            <div className="relative rounded-3xl overflow-hidden shadow-green-lg border border-green-vivid/20">
-              <img
-                src="/assets/generated/task-turtle-hero.dim_1200x600.jpg"
-                alt="Task Turtle — any task, any place"
-                className="w-full h-auto object-cover"
-              />
-              {/* Overlay card */}
-              <div className="absolute bottom-6 left-6 right-6 glass-card rounded-2xl p-4 border-green-gradient">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-green-surface flex items-center justify-center">
-                    <CheckCircle2 className="w-5 h-5 text-green-vivid" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      Task Delivered!
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Grocery from D-Mart • ₹249 + ₹20 tip
-                    </p>
-                  </div>
-                  <div className="ml-auto">
-                    <Badge className="bg-green-surface text-green-vivid border-0 text-xs">
-                      Complete
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+          {/* Right: hero image slider */}
+          <HeroSlider />
         </div>
       </section>
 
@@ -490,7 +567,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <img
-              src="/assets/generated/task-turtle-logo-transparent.dim_200x200.png"
+              src={logoImg}
               alt="Task Turtle"
               className="w-7 h-7 object-contain"
             />
@@ -499,15 +576,7 @@ export default function LandingPage() {
             </span>
           </div>
           <p className="text-muted-foreground text-sm">
-            © {new Date().getFullYear()}. Built with ❤️ using{" "}
-            <a
-              href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-green-vivid hover:underline"
-            >
-              caffeine.ai
-            </a>
+            © {new Date().getFullYear()} Task Turtle. All rights reserved.
           </p>
         </div>
       </footer>

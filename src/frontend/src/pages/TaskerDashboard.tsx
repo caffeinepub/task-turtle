@@ -12,8 +12,11 @@ import {
   Loader2,
   MapPin,
   Package,
+  Phone,
   RefreshCw,
+  Star,
   Store,
+  Trophy,
   Wallet,
   Zap,
 } from "lucide-react";
@@ -21,19 +24,31 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { TaskStatus } from "../backend.d";
 import type { Task } from "../backend.d";
+import { StarRating } from "../components/StarRating";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
+import { useNewTaskDetector } from "../hooks/useNewTaskDetector";
 import {
   useAcceptTask,
   useAvailableTasks,
+  useEarningsHistory,
   useMarkDelivered,
   useMarkInProgress,
   useMyAcceptedTasks,
   useProfile,
+  useRateTask,
   useUpdateProfile,
   useVerifyOtp,
   useWalletBalance,
 } from "../hooks/useQueries";
 import { formatINR, formatTimestamp } from "../utils/format";
+
+function parseStoreLocation(raw: string): {
+  store: string;
+  contact: string | null;
+} {
+  const parts = raw.split("|||CONTACT:");
+  return { store: parts[0], contact: parts[1] ?? null };
+}
 
 function EarningsCard() {
   const { data: balance = 0n } = useWalletBalance();
@@ -110,6 +125,7 @@ function AvailabilityToggle() {
 
 function AvailableTaskCard({ task, index }: { task: Task; index: number }) {
   const acceptTask = useAcceptTask();
+  const parsed = parseStoreLocation(task.storeLocation);
 
   const total = task.amount + (task.tip ?? 0n);
 
@@ -143,13 +159,22 @@ function AvailableTaskCard({ task, index }: { task: Task; index: number }) {
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Store className="w-3.5 h-3.5 text-green-vivid flex-shrink-0" />
           <span className="truncate font-medium text-foreground">
-            {task.storeLocation}
+            {parsed.store}
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <MapPin className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
           <span className="truncate">{task.customerLocation}</span>
         </div>
+        {parsed.contact && (
+          <a
+            href={`tel:${parsed.contact}`}
+            className="inline-flex items-center gap-1.5 bg-green-surface text-green-vivid text-xs font-semibold px-3 py-1.5 rounded-full border border-green-vivid/30 hover:bg-green-vivid hover:text-black transition-all duration-200"
+          >
+            <Phone className="w-3 h-3" />
+            Call Customer: {parsed.contact}
+          </a>
+        )}
       </div>
 
       <Button
@@ -176,15 +201,27 @@ function ActiveTaskCard({ task, index }: { task: Task; index: number }) {
   const markInProgress = useMarkInProgress();
   const markDelivered = useMarkDelivered();
   const verifyOtp = useVerifyOtp();
+  const rateTask = useRateTask();
   const [otpInput, setOtpInput] = useState("");
+  const [selectedRating, setSelectedRating] = useState(0);
+  const parsed = parseStoreLocation(task.storeLocation);
 
   const total = task.amount + (task.tip ?? 0n);
 
   const handleVerify = async () => {
-    if (!otpInput) return;
-    await verifyOtp.mutateAsync({ taskId: task.id, otp: BigInt(otpInput) });
+    if (otpInput.length !== 6) return;
+    const parsedOtp = Number.parseInt(otpInput, 10);
+    if (Number.isNaN(parsedOtp)) return;
+    await verifyOtp.mutateAsync({ taskId: task.id, otp: BigInt(parsedOtp) });
     setOtpInput("");
   };
+
+  const handleRate = async (stars: number) => {
+    setSelectedRating(stars);
+    await rateTask.mutateAsync({ taskId: task.id, stars: BigInt(stars) });
+  };
+
+  const hasRated = task.taskerRating != null && task.taskerRating > 0n;
 
   return (
     <motion.div
@@ -216,7 +253,7 @@ function ActiveTaskCard({ task, index }: { task: Task; index: number }) {
             <p className="text-xs text-muted-foreground font-medium">Pickup</p>
           </div>
           <p className="text-xs text-foreground font-semibold truncate">
-            {task.storeLocation}
+            {parsed.store}
           </p>
         </div>
         <div className="bg-secondary/60 rounded-xl p-3">
@@ -231,6 +268,33 @@ function ActiveTaskCard({ task, index }: { task: Task; index: number }) {
           </p>
         </div>
       </div>
+
+      {/* Customer contact — shown during active delivery */}
+      {parsed.contact && (
+        <div className="flex items-center gap-3 bg-green-surface/20 border border-green-vivid/20 rounded-xl p-3">
+          <div className="w-8 h-8 bg-green-surface rounded-lg flex items-center justify-center flex-shrink-0">
+            <Phone className="w-4 h-4 text-green-vivid" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-muted-foreground font-medium">
+              Customer Contact
+            </p>
+            <a
+              href={`tel:${parsed.contact}`}
+              data-ocid="tasker.active_task.call_button"
+              className="text-sm font-bold text-green-vivid hover:underline"
+            >
+              {parsed.contact}
+            </a>
+          </div>
+          <a
+            href={`tel:${parsed.contact}`}
+            className="flex-shrink-0 bg-green-vivid text-black text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-green-vivid/90 transition-colors"
+          >
+            Call
+          </a>
+        </div>
+      )}
 
       {/* Action buttons by status */}
       {task.status === TaskStatus.accepted && (
@@ -276,26 +340,57 @@ function ActiveTaskCard({ task, index }: { task: Task; index: number }) {
           <div className="flex items-center gap-2">
             <KeyRound className="w-4 h-4 text-green-vivid" />
             <p className="text-sm font-semibold text-green-vivid">
-              Verify OTP to complete
+              Enter Customer OTP to Complete
             </p>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Ask the customer to share their 6-digit OTP
-          </p>
+          {/* Step-by-step instruction */}
+          <div className="bg-background/60 rounded-lg p-3 space-y-2">
+            <div className="flex items-start gap-2 text-xs text-muted-foreground">
+              <span className="flex-shrink-0 w-4 h-4 rounded-full bg-green-surface text-green-vivid font-bold text-[10px] flex items-center justify-center mt-0.5">
+                1
+              </span>
+              <span>Tell the customer you have arrived with their items</span>
+            </div>
+            <div className="flex items-start gap-2 text-xs text-muted-foreground">
+              <span className="flex-shrink-0 w-4 h-4 rounded-full bg-green-surface text-green-vivid font-bold text-[10px] flex items-center justify-center mt-0.5">
+                2
+              </span>
+              <span>
+                Ask them to open their Task Turtle app →{" "}
+                <strong className="text-foreground">My Tasks</strong> and share
+                the 6-digit OTP shown there
+              </span>
+            </div>
+            <div className="flex items-start gap-2 text-xs text-muted-foreground">
+              <span className="flex-shrink-0 w-4 h-4 rounded-full bg-green-surface text-green-vivid font-bold text-[10px] flex items-center justify-center mt-0.5">
+                3
+              </span>
+              <span>
+                Type the OTP below and tap{" "}
+                <strong className="text-foreground">Verify</strong> — payment
+                will be released instantly
+              </span>
+            </div>
+          </div>
           <div className="flex gap-2">
             <Input
               data-ocid="tasker.verify_otp_input"
-              type="number"
-              placeholder="Enter 6-digit OTP"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="6-digit OTP"
               value={otpInput}
-              onChange={(e) => setOtpInput(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+                setOtpInput(val);
+              }}
               maxLength={6}
-              className="bg-background border-border focus:border-green-vivid/50 rounded-xl h-11 font-mono text-center tracking-widest text-lg"
+              className="bg-background border-border focus:border-green-vivid/50 rounded-xl h-11 font-mono text-center tracking-[0.3em] text-xl"
             />
             <Button
               data-ocid="tasker.verify_otp_button"
               onClick={handleVerify}
-              disabled={verifyOtp.isPending || otpInput.length < 4}
+              disabled={verifyOtp.isPending || otpInput.length !== 6}
               className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-green-sm rounded-xl px-5 flex-shrink-0"
             >
               {verifyOtp.isPending ? (
@@ -305,10 +400,63 @@ function ActiveTaskCard({ task, index }: { task: Task; index: number }) {
               )}
             </Button>
           </div>
+          {verifyOtp.isError && (
+            <p
+              data-ocid="tasker.verify_otp_error"
+              className="text-xs text-red-400 flex items-center gap-1.5"
+            >
+              <span>⚠</span> Wrong OTP — ask the customer to re-check their app
+              and share the correct code
+            </p>
+          )}
         </div>
       )}
 
-      {task.acceptedAt && (
+      {/* Rating — shown after task is completed */}
+      {task.status === TaskStatus.completed && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-yellow-400/8 border border-yellow-400/25 rounded-xl p-4 space-y-2"
+        >
+          {hasRated ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">
+                Customer rated:
+              </span>
+              <StarRating
+                value={Number(task.taskerRating)}
+                readonly
+                size="sm"
+              />
+              <span className="text-sm text-muted-foreground">
+                {Number(task.taskerRating)}/5
+              </span>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-foreground">
+                Rate the Customer
+              </p>
+              <p className="text-xs text-muted-foreground">
+                How was working with this customer?
+              </p>
+              <div className="flex items-center gap-3">
+                <StarRating
+                  value={selectedRating}
+                  onChange={handleRate}
+                  size="md"
+                />
+                {rateTask.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+            </>
+          )}
+        </motion.div>
+      )}
+
+      {task.acceptedAt && task.status !== TaskStatus.completed && (
         <p className="text-xs text-muted-foreground">
           Accepted: {formatTimestamp(task.acceptedAt)}
         </p>
@@ -317,7 +465,73 @@ function ActiveTaskCard({ task, index }: { task: Task; index: number }) {
   );
 }
 
+function CompletedTaskCard({ task, index }: { task: Task; index: number }) {
+  const rateTask = useRateTask();
+  const [selectedRating, setSelectedRating] = useState(0);
+  const total = task.amount + (task.tip ?? 0n);
+  const hasCustomerRating = task.taskerRating != null && task.taskerRating > 0n;
+
+  const handleRate = async (stars: number) => {
+    setSelectedRating(stars);
+    await rateTask.mutateAsync({ taskId: task.id, stars: BigInt(stars) });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.05 }}
+      data-ocid={`tasker.completed_task.${index + 1}`}
+      className="glass-card rounded-2xl p-4 border-border space-y-3"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-foreground text-sm truncate">
+            {task.title}
+          </h3>
+          {task.completedAt && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Completed: {formatTimestamp(task.completedAt)}
+            </p>
+          )}
+        </div>
+        <div className="text-right flex-shrink-0">
+          <p className="font-bold text-green-vivid text-sm">
+            +{formatINR(total)}
+          </p>
+          <p className="text-[10px] text-muted-foreground">earned</p>
+        </div>
+      </div>
+
+      {/* Rating received from customer */}
+      {hasCustomerRating ? (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Customer rated:</span>
+          <StarRating value={Number(task.taskerRating)} readonly size="sm" />
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground font-medium">
+            Rate the customer:
+          </p>
+          <div className="flex items-center gap-2">
+            <StarRating
+              value={selectedRating}
+              onChange={handleRate}
+              size="sm"
+            />
+            {rateTask.isPending && (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+            )}
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 export default function TaskerDashboard() {
+  const { data: profile } = useProfile();
   const {
     data: availableTasks = [],
     isLoading: loadingAvailable,
@@ -328,6 +542,11 @@ export default function TaskerDashboard() {
     isLoading: loadingActive,
     refetch: refetchActive,
   } = useMyAcceptedTasks();
+  const { data: completedTasks = [], isLoading: loadingCompleted } =
+    useEarningsHistory();
+
+  // Rapido-style sound notification when new tasks arrive
+  useNewTaskDetector(availableTasks, profile?.isAvailableAsTasker ?? false);
 
   const refetchAll = () => {
     refetchAvailable();
@@ -454,6 +673,54 @@ export default function TaskerDashboard() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Completed Tasks */}
+      <div>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 bg-yellow-400/15 rounded-xl flex items-center justify-center">
+            <Trophy className="w-4 h-4 text-yellow-400" />
+          </div>
+          <h2 className="font-display font-bold text-xl">
+            Completed Tasks
+            {completedTasks.length > 0 && (
+              <Badge className="ml-2 bg-yellow-400/15 text-yellow-400 border-0 text-xs">
+                {completedTasks.length}
+              </Badge>
+            )}
+          </h2>
+        </div>
+
+        {loadingCompleted ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-32 rounded-2xl bg-secondary" />
+            ))}
+          </div>
+        ) : completedTasks.length === 0 ? (
+          <div
+            data-ocid="tasker.completed_tasks.empty_state"
+            className="glass-card rounded-2xl p-10 text-center border-border"
+          >
+            <div className="text-4xl mb-3">🏆</div>
+            <h3 className="font-semibold mb-1">No completed tasks yet</h3>
+            <p className="text-muted-foreground text-sm">
+              Your earning history will appear here once you complete tasks
+            </p>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <AnimatePresence>
+              {completedTasks.map((task, i) => (
+                <CompletedTaskCard
+                  key={String(task.id)}
+                  task={task}
+                  index={i}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
     </div>
   );

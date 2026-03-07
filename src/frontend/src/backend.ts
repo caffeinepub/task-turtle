@@ -114,8 +114,10 @@ export interface Task {
     title: string;
     otpCode: bigint;
     customerLocation: string;
+    taskerRating?: bigint;
     otpVerified: boolean;
     createdAt: bigint;
+    customerRating?: bigint;
     description: string;
     taskerId?: Principal;
     storeLocation: string;
@@ -203,6 +205,7 @@ export interface backendInterface {
     getMyAcceptedTasks(): Promise<Array<Task>>;
     getMyPostedTasks(): Promise<Array<Task>>;
     getPlatformStats(): Promise<TaskStats>;
+    getRatingCount(user: Principal): Promise<bigint>;
     getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
     getTaskById(id: bigint): Promise<TaskResult>;
     getUserProfile(user: Principal): Promise<PublicUserProfile>;
@@ -211,6 +214,7 @@ export interface backendInterface {
     isStripeConfigured(): Promise<boolean>;
     markTaskDelivered(taskId: bigint): Promise<TaskResult>;
     markTaskInProgress(taskId: bigint): Promise<TaskResult>;
+    rateTask(taskId: bigint, stars: bigint): Promise<boolean>;
     saveCallerUserProfile(profile: PublicUserProfile): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
@@ -403,6 +407,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async getRatingCount(arg0: Principal): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getRatingCount(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getRatingCount(arg0);
+            return result;
+        }
+    }
     async getStripeSessionStatus(arg0: string): Promise<StripeSessionStatus> {
         if (this.processError) {
             try {
@@ -513,6 +531,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.markTaskInProgress(arg0);
             return from_candid_TaskResult_n1(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async rateTask(arg0: bigint, arg1: bigint): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.rateTask(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.rateTask(arg0, arg1);
+            return result;
         }
     }
     async saveCallerUserProfile(arg0: PublicUserProfile): Promise<void> {
@@ -680,8 +712,10 @@ function from_candid_record_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint
     title: string;
     otpCode: bigint;
     customerLocation: string;
+    taskerRating: [] | [bigint];
     otpVerified: boolean;
     createdAt: bigint;
+    customerRating: [] | [bigint];
     description: string;
     taskerId: [] | [Principal];
     storeLocation: string;
@@ -696,8 +730,10 @@ function from_candid_record_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint
     title: string;
     otpCode: bigint;
     customerLocation: string;
+    taskerRating?: bigint;
     otpVerified: boolean;
     createdAt: bigint;
+    customerRating?: bigint;
     description: string;
     taskerId?: Principal;
     storeLocation: string;
@@ -713,8 +749,10 @@ function from_candid_record_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint
         title: value.title,
         otpCode: value.otpCode,
         customerLocation: value.customerLocation,
+        taskerRating: record_opt_to_undefined(from_candid_opt_n5(_uploadFile, _downloadFile, value.taskerRating)),
         otpVerified: value.otpVerified,
         createdAt: value.createdAt,
+        customerRating: record_opt_to_undefined(from_candid_opt_n5(_uploadFile, _downloadFile, value.customerRating)),
         description: value.description,
         taskerId: record_opt_to_undefined(from_candid_opt_n9(_uploadFile, _downloadFile, value.taskerId)),
         storeLocation: value.storeLocation,
