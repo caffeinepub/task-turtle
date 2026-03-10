@@ -26,29 +26,55 @@ export function useEnsureProfile() {
       if (!actor) return null;
       // Only register profile for authenticated (non-anonymous) users
       if (!isAuthenticated) return null;
-      try {
-        // Try to fetch existing profile first
-        const existing = await actor.getCallerUserProfile();
-        if (!existing) {
-          // User exists in access control but not in profiles map — create profile
-          await actor.updateProfile("New User", null, "", false);
-        }
-        return true;
-      } catch {
-        // getCallerUserProfile threw (user not yet registered in profiles map)
-        // Try to create the profile directly
+
+      // Attempt to ensure profile registration with retries.
+      // The backend requires _initializeAccessControlWithSecret to run first
+      // (done in useActor), then updateProfile registers the user in the
+      // profiles map so all subsequent calls pass the isUser() check.
+      for (let attempt = 0; attempt < 5; attempt++) {
         try {
-          await actor.updateProfile("New User", null, "", false);
+          const existing = await actor.getCallerUserProfile();
+          if (!existing) {
+            // Registered in access control but no profile entry yet
+            await actor.updateProfile("New User", null, "", false);
+          }
           return true;
-        } catch {
-          return null;
+        } catch (err) {
+          const msg = String(err);
+          // If "Unauthorized" it means access control init hasn't completed yet
+          // — wait and retry
+          if (
+            msg.includes("Unauthorized") ||
+            msg.includes("Only users can") ||
+            msg.includes("reject")
+          ) {
+            if (attempt < 4) {
+              await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+              continue;
+            }
+            // Last attempt: try updateProfile directly (it also calls access-control init internally)
+            try {
+              await actor.updateProfile("New User", null, "", false);
+              return true;
+            } catch {
+              return null;
+            }
+          }
+          // Other error — try updateProfile directly
+          try {
+            await actor.updateProfile("New User", null, "", false);
+            return true;
+          } catch {
+            return null;
+          }
         }
       }
+      return null;
     },
     enabled: !!actor && !isFetching && isAuthenticated,
     staleTime: Number.POSITIVE_INFINITY,
-    retry: 3,
-    retryDelay: 1000,
+    retry: 5,
+    retryDelay: (attempt) => Math.min(1000 * (attempt + 1), 5000),
   });
 }
 
@@ -65,11 +91,23 @@ export function useProfile() {
       if (!actor || !isAuthenticated) return null;
       try {
         return await actor.getCallerUserProfile();
-      } catch {
+      } catch (err) {
+        const msg = String(err);
+        if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
+          // Try auto-registering
+          try {
+            await actor.updateProfile("New User", null, "", false);
+            return await actor.getCallerUserProfile();
+          } catch {
+            return null;
+          }
+        }
         return null;
       }
     },
     enabled: !!actor && !isFetching && isAuthenticated,
+    retry: 3,
+    retryDelay: 1000,
   });
 }
 
@@ -156,12 +194,24 @@ export function useMyPostedTasks(options?: { refetchInterval?: number }) {
       if (!actor || !isAuthenticated) return [];
       try {
         return await actor.getMyPostedTasks();
-      } catch {
+      } catch (err) {
+        const msg = String(err);
+        if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
+          // User not yet registered — try registering, then retry
+          try {
+            await actor.updateProfile("New User", null, "", false);
+            return await actor.getMyPostedTasks();
+          } catch {
+            return [];
+          }
+        }
         return [];
       }
     },
     enabled: !!actor && !isFetching && isAuthenticated,
     refetchInterval: options?.refetchInterval,
+    retry: 3,
+    retryDelay: 1000,
   });
 }
 
@@ -188,14 +238,52 @@ export function useCreateTask() {
       checkAuthenticated(identity);
       if (!actor)
         throw new Error("Not connected to backend. Please refresh the page.");
-      return actor.createTask(
-        title,
-        description,
-        amount,
-        tip,
-        customerLocation,
-        storeLocation,
-      );
+
+      // Ensure user is registered before creating a task.
+      // Retry up to 5 times if backend rejects due to access-control race.
+      let lastErr: unknown;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          // Ensure profile exists (registers user in access control)
+          try {
+            const profile = await actor.getCallerUserProfile();
+            if (!profile) {
+              await actor.updateProfile("New User", null, "", false);
+            }
+          } catch {
+            // Not yet registered — create profile to register
+            try {
+              await actor.updateProfile("New User", null, "", false);
+            } catch {
+              // ignore — might already be registered
+            }
+          }
+
+          return await actor.createTask(
+            title,
+            description,
+            amount,
+            tip,
+            customerLocation,
+            storeLocation,
+          );
+        } catch (err) {
+          lastErr = err;
+          const msg = String(err);
+          if (
+            msg.includes("Unauthorized") ||
+            msg.includes("Only users can") ||
+            msg.includes("reject")
+          ) {
+            if (attempt < 4) {
+              await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+              continue;
+            }
+          }
+          throw err;
+        }
+      }
+      throw lastErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-posted-tasks"] });
@@ -206,7 +294,9 @@ export function useCreateTask() {
       // Convert backend trap messages to user-friendly errors
       const msg = err.message || "";
       if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
-        toast.error("Session error — please logout and login again.");
+        toast.error(
+          "Login ho jaao aur dobara try karo — session expire ho gaya.",
+        );
       } else {
         toast.error(msg || "Failed to post task");
       }
@@ -271,12 +361,23 @@ export function useMyAcceptedTasks() {
       if (!actor || !isAuthenticated) return [];
       try {
         return await actor.getMyAcceptedTasks();
-      } catch {
+      } catch (err) {
+        const msg = String(err);
+        if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
+          try {
+            await actor.updateProfile("New User", null, "", false);
+            return await actor.getMyAcceptedTasks();
+          } catch {
+            return [];
+          }
+        }
         return [];
       }
     },
     enabled: !!actor && !isFetching && isAuthenticated,
     refetchInterval: 10000,
+    retry: 3,
+    retryDelay: 1000,
   });
 }
 
