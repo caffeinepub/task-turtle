@@ -1,73 +1,36 @@
 # Task Turtle
 
 ## Current State
-
-New project. No existing code.
+- Stripe integrated for wallet top-up (`createCheckoutSession`, `isStripeConfigured`, `setStripeConfiguration` in backend)
+- `useCreateCheckoutSession` hook calls Stripe API via backend actor
+- WalletPage has "Add Funds" button that opens Stripe checkout
+- Escrow is handled internally by Motoko wallet balance system
 
 ## Requested Changes (Diff)
 
 ### Add
-
-**Landing Page**
-- Hero section: "Any Task. Any Place. By Nearby People." tagline
-- How It Works: 5-step visual flow (Post Task -> Set Amount -> Tasker Accepts -> OTP Verify -> Payment Released)
-- Use cases section (groceries, errands, delivery, etc.)
-- CTA: Post a Task button
-
-**Authentication**
-- Login / Register with name, phone, email
-- User can act as both Customer and Tasker
-
-**Customer Dashboard**
-- Post new task: title, description, location (text), amount (INR), optional tip
-- View all posted tasks with live status
-- OTP display for task completion verification
-- Task status timeline (Posted -> Accepted -> In Progress -> Delivered -> Complete)
-
-**Tasker Dashboard**
-- View available nearby tasks (sorted by distance/amount)
-- Accept or reject tasks
-- View active task details with navigation info
-- Enter OTP to complete delivery
-- Earnings wallet showing balance, platform fee breakdown, task history
-
-**Live Task Screen**
-- Real-time status timeline for a specific task
-- OTP verification flow
-- Task completion confirmation
-
-**Wallet & Payments**
-- Tasker earnings balance
-- Per-task breakdown: amount, platform fee (5%), tasker earning
-- Task history with payment status
-- Stripe payment integration for escrow simulation
-
-**Backend (Motoko)**
-- User management: register, login (email+password auth via authorization component), profile update
-- Task management: createTask, getTasks, getTaskById, acceptTask, completeTask (OTP verify), cancelTask
-- Tasker flow: getAvailableTasks, acceptTask, submitOTP
-- Payment logic: escrow simulation -- task amount locked on creation, released to tasker on OTP verification, platform fee deducted
-- Wallet: getWalletBalance, getEarningsHistory
-- OTP: generate 6-digit OTP on task acceptance, verify on completion
+- Razorpay checkout.js SDK loaded via script tag
+- `useRazorpayCheckout` hook: opens Razorpay checkout modal with UPI/card/netbanking options
+- Amount selection UI (₹100, ₹200, ₹500, ₹1000, custom) before Razorpay opens
+- Cashfree escrow branding on task posting flow ("Payment secured by Cashfree Escrow")
+- Transaction state: pending → processing → success/failed UI in wallet page
+- `RazorpayCheckoutModal` component: amount picker + Razorpay SDK integration
 
 ### Modify
-
-Nothing -- new project.
+- WalletPage: replace Stripe "Add Funds" button with Razorpay flow
+- `useCreateCheckoutSession` → replace with `useRazorpayCheckout` (frontend-only SDK call)
+- Dashboard task posting form: add "Payment will be held in Cashfree Escrow" note
+- Remove all Stripe references in frontend UI and hooks
 
 ### Remove
-
-Nothing -- new project.
+- `useCreateCheckoutSession` hook (Stripe-specific)
+- All Stripe branding/references from frontend
+- Stripe success/cancel URL query param handling
 
 ## Implementation Plan
-
-1. Select components: authorization, stripe
-2. Generate Motoko backend with: User profiles, Task CRUD, OTP generation/verification, Escrow/wallet logic, Tasker matching (distance-based sort)
-3. Generate logo and hero visual assets
-4. Build frontend:
-   - Landing page with glossy green+black Blinkit-style UI
-   - Auth pages (login/register)
-   - Customer dashboard (post task, track tasks, OTP display)
-   - Tasker dashboard (available tasks, accept/reject, OTP entry, wallet)
-   - Live task screen (status timeline)
-   - Wallet page (earnings, history)
-5. Deploy
+1. Remove `useCreateCheckoutSession` from useQueries.ts, replace with `useRazorpayCheckout` that loads Razorpay checkout.js and opens modal
+2. Create `RazorpayCheckoutModal` component with amount picker (₹100/200/500/1000/custom)
+3. Update WalletPage to use new Razorpay modal instead of Stripe button
+4. Add Cashfree escrow notice to Dashboard task posting form
+5. Remove Stripe success/cancel URL param handling
+6. NOTE: Backend APIs unchanged - wallet balance still managed by Motoko canister

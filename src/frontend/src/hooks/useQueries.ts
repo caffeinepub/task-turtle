@@ -508,34 +508,3 @@ export function useRateTask() {
     },
   });
 }
-
-export function useCreateCheckoutSession() {
-  const { actor } = useActor();
-  return useMutation({
-    mutationFn: async ({
-      successUrl,
-      cancelUrl,
-    }: {
-      successUrl: string;
-      cancelUrl: string;
-    }) => {
-      if (!actor) throw new Error("Not connected");
-      const items = [
-        {
-          productName: "Wallet Top-up",
-          currency: "INR",
-          quantity: BigInt(1),
-          priceInCents: BigInt(50000), // ₹500 default
-          productDescription: "Add funds to your Task Turtle wallet",
-        },
-      ];
-      return actor.createCheckoutSession(items, successUrl, cancelUrl);
-    },
-    onSuccess: (url: string) => {
-      window.open(url, "_blank");
-    },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to initiate payment");
-    },
-  });
-}

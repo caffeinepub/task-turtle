@@ -376,6 +376,19 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
         </div>
       )}
 
+      {/* Cashfree escrow notice */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-secondary/40 rounded-xl px-3 py-2.5 border border-border/50">
+        <span>💰</span>
+        <span>
+          Task amount held in{" "}
+          <span className="text-foreground font-semibold">escrow</span> •
+          Released to tasker after OTP verification •{" "}
+          <span className="text-foreground font-medium">
+            Secured by Cashfree
+          </span>
+        </span>
+      </div>
+
       <Button
         type="submit"
         size="lg"
