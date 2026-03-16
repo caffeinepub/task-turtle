@@ -11,8 +11,10 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
-import logoImg from "../../public/assets/generated/task-turtle-logo-transparent.dim_200x200.png";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+
+const LOGO_URL =
+  "/assets/generated/task-turtle-logo-transparent.dim_200x200.png";
 
 const navLinks = [
   {
@@ -41,7 +43,7 @@ export default function Navbar() {
         {/* Logo */}
         <Link to="/dashboard" className="flex items-center gap-2.5 group">
           <img
-            src={logoImg}
+            src={LOGO_URL}
             alt="Task Turtle"
             className="w-9 h-9 object-contain"
           />

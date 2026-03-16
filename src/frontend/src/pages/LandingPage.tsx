@@ -17,11 +17,13 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
-import slider1 from "../../public/assets/generated/slider-1.dim_800x500.jpg";
-import slider2 from "../../public/assets/generated/slider-2.dim_800x500.jpg";
-import slider3 from "../../public/assets/generated/slider-3.dim_800x500.jpg";
-import logoImg from "../../public/assets/generated/task-turtle-logo-transparent.dim_200x200.png";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+
+const LOGO_URL =
+  "/assets/generated/task-turtle-logo-transparent.dim_200x200.png";
+const slider1 = "/assets/generated/slider-1.dim_800x500.jpg";
+const slider2 = "/assets/generated/slider-2.dim_800x500.jpg";
+const slider3 = "/assets/generated/slider-3.dim_800x500.jpg";
 
 const sliderImages = [
   {
@@ -247,7 +249,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
             <img
-              src={logoImg}
+              src={LOGO_URL}
               alt="Task Turtle"
               className="w-9 h-9 object-contain"
             />
@@ -567,7 +569,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <img
-              src={logoImg}
+              src={LOGO_URL}
               alt="Task Turtle"
               className="w-7 h-7 object-contain"
             />
