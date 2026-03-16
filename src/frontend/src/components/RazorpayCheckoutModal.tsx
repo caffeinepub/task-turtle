@@ -16,6 +16,7 @@ interface RazorpayCheckoutModalProps {
 }
 
 const QUICK_AMOUNTS = [100, 200, 500, 1000];
+const RAZORPAY_KEY_ID = "rzp_live_SRNbTwyEmzQSvO";
 
 declare global {
   interface Window {
@@ -62,7 +63,7 @@ export default function RazorpayCheckoutModal({
       return;
     }
     const options = {
-      key: "rzp_test_placeholder",
+      key: RAZORPAY_KEY_ID,
       amount: finalAmount * 100,
       currency: "INR",
       name: "Task Turtle",
@@ -70,9 +71,7 @@ export default function RazorpayCheckoutModal({
       prefill: { contact: "", email: "" },
       theme: { color: "#22c55e" },
       handler: () => {
-        toast.success(
-          `Payment of ₹${finalAmount} added to wallet! (Configure Razorpay API key to activate live payments)`,
-        );
+        toast.success(`₹${finalAmount} added to wallet successfully!`);
         onClose();
         setLoading(false);
       },
