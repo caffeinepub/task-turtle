@@ -1,23 +1,35 @@
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Loader2, Lock, Shield, Zap } from "lucide-react";
+import { Loader2, Shield, ShieldCheck, User } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import logoImg from "../assets/task-turtle-logo.png";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
-
-const LOGO_URL =
-  "/assets/generated/task-turtle-logo-transparent.dim_200x200.png";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login, identity, isLoggingIn, isInitializing, loginStatus } =
     useInternetIdentity();
+  const [loginMode, setLoginMode] = useState<"user" | "admin" | null>(null);
 
   useEffect(() => {
     if (identity) {
-      navigate({ to: "/dashboard" });
+      const mode = localStorage.getItem("loginMode");
+      if (mode === "admin") {
+        navigate({ to: "/admin" });
+      } else {
+        navigate({ to: "/dashboard" });
+      }
     }
   }, [identity, navigate]);
+
+  const handleLogin = (mode: "user" | "admin") => {
+    localStorage.setItem("loginMode", mode);
+    setLoginMode(mode);
+    login();
+  };
+
+  const isLoading = isLoggingIn || isInitializing;
 
   return (
     <div className="min-h-screen bg-background bg-mesh flex items-center justify-center px-4">
@@ -35,13 +47,10 @@ export default function LoginPage() {
         >
           <Link to="/" className="inline-flex flex-col items-center gap-3">
             <img
-              src={LOGO_URL}
+              src={logoImg}
               alt="Task Turtle"
-              className="w-20 h-20 object-contain animate-float"
+              className="h-14 w-auto object-contain animate-float"
             />
-            <span className="font-display font-black text-2xl text-green-vivid">
-              Task Turtle
-            </span>
           </Link>
           <p className="text-muted-foreground text-sm mt-2">
             Any Task. Any Place. By Nearby People.
@@ -57,45 +66,85 @@ export default function LoginPage() {
         >
           <div className="text-center mb-8">
             <h1 className="font-display font-bold text-2xl mb-2">
-              Welcome Back
+              Welcome to Task Turtle
             </h1>
             <p className="text-muted-foreground text-sm">
-              Sign in securely with Internet Identity
+              Choose how you want to sign in
             </p>
           </div>
 
-          {/* Login button */}
-          <Button
-            size="lg"
-            data-ocid="auth.login_submit_button"
-            onClick={login}
-            disabled={isLoggingIn || isInitializing}
-            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-base py-6 shadow-green-md hover:shadow-green-lg transition-all duration-300 rounded-2xl"
+          {/* Login as User */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
           >
-            {isLoggingIn || isInitializing ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                {isInitializing ? "Initializing..." : "Connecting..."}
-              </>
-            ) : (
-              <>
-                <Shield className="w-5 h-5 mr-2" />
-                Login / Sign Up
-              </>
-            )}
-          </Button>
+            <button
+              type="button"
+              onClick={() => handleLogin("user")}
+              disabled={isLoading}
+              data-ocid="auth.login_submit_button"
+              className="w-full mb-4 rounded-2xl p-5 border-2 border-primary/30 bg-green-surface/30 hover:bg-green-surface/60 hover:border-primary/60 transition-all duration-300 text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/30 transition-colors">
+                  {isLoading && loginMode === "user" ? (
+                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                  ) : (
+                    <User className="w-6 h-6 text-primary" />
+                  )}
+                </div>
+                <div>
+                  <p className="font-bold text-base text-foreground">
+                    Login as User
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Post tasks, track orders, manage wallet
+                  </p>
+                </div>
+              </div>
+            </button>
+          </motion.div>
 
-          {/* Register button — same Internet Identity flow */}
-          <Button
-            size="lg"
-            variant="outline"
-            data-ocid="auth.register_submit_button"
-            onClick={login}
-            disabled={isLoggingIn || isInitializing}
-            className="w-full mt-3 border-border text-foreground hover:bg-secondary font-semibold rounded-2xl py-6"
+          {/* Divider */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">or</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          {/* Login as Admin */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3 }}
           >
-            Create New Account
-          </Button>
+            <button
+              type="button"
+              onClick={() => handleLogin("admin")}
+              disabled={isLoading}
+              data-ocid="auth.register_submit_button"
+              className="w-full rounded-2xl p-5 border-2 border-yellow-400/30 bg-yellow-400/5 hover:bg-yellow-400/10 hover:border-yellow-400/60 transition-all duration-300 text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-yellow-400/15 flex items-center justify-center flex-shrink-0 group-hover:bg-yellow-400/25 transition-colors">
+                  {isLoading && loginMode === "admin" ? (
+                    <Loader2 className="w-6 h-6 text-yellow-400 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="w-6 h-6 text-yellow-400" />
+                  )}
+                </div>
+                <div>
+                  <p className="font-bold text-base text-foreground">
+                    Login as Admin
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Platform control — tasks, taskers, users
+                  </p>
+                </div>
+              </div>
+            </button>
+          </motion.div>
 
           {/* Invisible marker inputs for spec compliance */}
           <input type="hidden" data-ocid="auth.email_input" />
@@ -103,43 +152,23 @@ export default function LoginPage() {
           <input type="hidden" data-ocid="auth.name_input" />
 
           {loginStatus === "loginError" && (
-            <p className="text-destructive text-sm text-center mt-4">
+            <p className="text-red-400 text-sm text-center mt-4">
               Login failed. Please try again.
             </p>
           )}
-        </motion.div>
 
-        {/* Trust indicators */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="mt-6 grid grid-cols-3 gap-3"
-        >
-          {[
-            { icon: Lock, label: "Secure", desc: "End-to-end encrypted" },
-            { icon: Shield, label: "Private", desc: "No personal data stored" },
-            { icon: Zap, label: "Instant", desc: "Login in seconds" },
-          ].map((item) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={item.label}
-                className="glass-card rounded-xl p-3 text-center border-border"
-              >
-                <Icon className="w-4 h-4 text-green-vivid mx-auto mb-1" />
-                <p className="text-xs font-semibold text-foreground">
-                  {item.label}
-                </p>
-                <p className="text-xs text-muted-foreground">{item.desc}</p>
-              </div>
-            );
-          })}
+          {/* Security note */}
+          <div className="mt-6 flex items-start gap-2 bg-secondary/50 rounded-2xl px-4 py-3">
+            <Shield className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-muted-foreground">
+              Secured by{" "}
+              <span className="font-semibold text-foreground">
+                Internet Identity
+              </span>{" "}
+              — no passwords, no data leaks.
+            </p>
+          </div>
         </motion.div>
-
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          By continuing, you agree to Task Turtle's Terms of Service
-        </p>
       </div>
     </div>
   );

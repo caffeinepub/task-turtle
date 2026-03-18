@@ -134,7 +134,6 @@ actor {
     switch (tasks.get(id)) {
       case (null) { #err("Task not found") };
       case (?task) {
-        // Only customer, tasker, or admin can view the task
         let isCustomer = task.customerId == caller;
         let isTasker = switch (task.taskerId) {
           case (null) { false };
@@ -329,7 +328,6 @@ actor {
               };
               tasks.add(taskId, updatedTask);
 
-              // Update platform fees
               let totalAmount = task.amount + tip;
               platformFees += (totalAmount * 5) / 100;
               true;
@@ -376,12 +374,27 @@ actor {
   };
 
   public query func getAvailableTasks() : async [Task] {
-    // Anyone can browse available tasks (marketplace feature)
     tasks.values().toArray().filter(
       func(task) {
         task.status == #posted;
       }
     ).sort(Task.compareByCreatedAt);
+  };
+
+  // Admin-only: get ALL tasks regardless of status
+  public query ({ caller }) func getAllTasks() : async [Task] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view all tasks");
+    };
+    tasks.values().toArray();
+  };
+
+  // Admin-only: get ALL user profiles
+  public query ({ caller }) func getAllUserProfiles() : async [PublicUserProfile] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view all profiles");
+    };
+    profiles.values().toArray();
   };
 
   public shared ({ caller }) func updateTask(taskId : Nat, update : TaskUpdateRequest) : async () {
@@ -474,11 +487,9 @@ actor {
         if (task.status != #completed) { return false };
 
         if (caller == task.customerId and task.customerRating == null and task.taskerId != null) {
-          // Customer rates the tasker
           let updatedTask = { task with customerRating = ?stars };
           tasks.add(taskId, updatedTask);
 
-          // Update tasker's rating
           var currentCount = 0;
           switch (task.taskerId) {
             case (null) { return false };
@@ -618,4 +629,3 @@ actor {
     };
   };
 };
-

@@ -10,6 +10,7 @@ import {
 import Navbar from "./components/Navbar";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useEnsureProfile } from "./hooks/useQueries";
+import AdminDashboard from "./pages/AdminDashboard";
 import Dashboard from "./pages/Dashboard";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
@@ -130,6 +131,12 @@ const profileRoute = createRoute({
   component: ProfilePage,
 });
 
+const adminRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/admin",
+  component: AdminDashboard,
+});
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
@@ -140,6 +147,7 @@ const routeTree = rootRoute.addChildren([
     taskerRoute,
     walletRoute,
     profileRoute,
+    adminRoute,
   ]),
 ]);
 

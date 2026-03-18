@@ -17,10 +17,9 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+import logoImg from "../assets/task-turtle-logo.png";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
-const LOGO_URL =
-  "/assets/generated/task-turtle-logo-transparent.dim_200x200.png";
 const slider1 = "/assets/generated/slider-1.dim_800x500.jpg";
 const slider2 = "/assets/generated/slider-2.dim_800x500.jpg";
 const slider3 = "/assets/generated/slider-3.dim_800x500.jpg";
@@ -249,12 +248,12 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
             <img
-              src={LOGO_URL}
+              src={logoImg}
               alt="Task Turtle"
-              className="w-9 h-9 object-contain"
+              className="h-9 w-auto object-contain"
             />
-            <span className="font-display font-bold text-lg text-green-vivid">
-              Task Turtle
+            <span className="text-xl font-black tracking-tight text-foreground hover:text-green-vivid transition-colors">
+              TaskTurtle
             </span>
           </Link>
           <div className="flex items-center gap-3">
@@ -567,14 +566,14 @@ export default function LandingPage() {
       {/* ─── Footer ──────────────────────────────────────────────────── */}
       <footer className="border-t border-border py-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <img
-              src={LOGO_URL}
+              src={logoImg}
               alt="Task Turtle"
-              className="w-7 h-7 object-contain"
+              className="h-8 w-auto object-contain"
             />
-            <span className="font-display font-bold text-green-vivid">
-              Task Turtle
+            <span className="text-lg font-black tracking-tight text-foreground">
+              TaskTurtle
             </span>
           </div>
           <p className="text-muted-foreground text-sm">

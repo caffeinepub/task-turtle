@@ -1,6 +1,8 @@
+import type { Principal } from "@icp-sdk/core/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { PublicUserProfile, Task } from "../backend.d";
+import { UserRole } from "../backend.d";
 import { useActor } from "./useActor";
 import { useInternetIdentity } from "./useInternetIdentity";
 
@@ -13,7 +15,6 @@ function checkAuthenticated(
 }
 
 // ─── Auto-register profile on first login ────────────────────────────────────
-// This ensures the backend `#user` permission check passes for all operations.
 
 export function useEnsureProfile() {
   const { actor, isFetching } = useActor();
@@ -24,25 +25,17 @@ export function useEnsureProfile() {
     queryKey: ["ensure-profile", identity?.getPrincipal().toString()],
     queryFn: async () => {
       if (!actor) return null;
-      // Only register profile for authenticated (non-anonymous) users
       if (!isAuthenticated) return null;
 
-      // Attempt to ensure profile registration with retries.
-      // The backend requires _initializeAccessControlWithSecret to run first
-      // (done in useActor), then updateProfile registers the user in the
-      // profiles map so all subsequent calls pass the isUser() check.
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           const existing = await actor.getCallerUserProfile();
           if (!existing) {
-            // Registered in access control but no profile entry yet
             await actor.updateProfile("New User", null, "", false);
           }
           return true;
         } catch (err) {
           const msg = String(err);
-          // If "Unauthorized" it means access control init hasn't completed yet
-          // — wait and retry
           if (
             msg.includes("Unauthorized") ||
             msg.includes("Only users can") ||
@@ -52,7 +45,6 @@ export function useEnsureProfile() {
               await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
               continue;
             }
-            // Last attempt: try updateProfile directly (it also calls access-control init internally)
             try {
               await actor.updateProfile("New User", null, "", false);
               return true;
@@ -60,7 +52,6 @@ export function useEnsureProfile() {
               return null;
             }
           }
-          // Other error — try updateProfile directly
           try {
             await actor.updateProfile("New User", null, "", false);
             return true;
@@ -94,7 +85,6 @@ export function useProfile() {
       } catch (err) {
         const msg = String(err);
         if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
-          // Try auto-registering
           try {
             await actor.updateProfile("New User", null, "", false);
             return await actor.getCallerUserProfile();
@@ -197,7 +187,6 @@ export function useMyPostedTasks(options?: { refetchInterval?: number }) {
       } catch (err) {
         const msg = String(err);
         if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
-          // User not yet registered — try registering, then retry
           try {
             await actor.updateProfile("New User", null, "", false);
             return await actor.getMyPostedTasks();
@@ -239,23 +228,19 @@ export function useCreateTask() {
       if (!actor)
         throw new Error("Not connected to backend. Please refresh the page.");
 
-      // Ensure user is registered before creating a task.
-      // Retry up to 5 times if backend rejects due to access-control race.
       let lastErr: unknown;
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
-          // Ensure profile exists (registers user in access control)
           try {
             const profile = await actor.getCallerUserProfile();
             if (!profile) {
               await actor.updateProfile("New User", null, "", false);
             }
           } catch {
-            // Not yet registered — create profile to register
             try {
               await actor.updateProfile("New User", null, "", false);
             } catch {
-              // ignore — might already be registered
+              // ignore
             }
           }
 
@@ -291,7 +276,6 @@ export function useCreateTask() {
       toast.success("Task posted successfully!");
     },
     onError: (err: Error) => {
-      // Convert backend trap messages to user-friendly errors
       const msg = err.message || "";
       if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
         toast.error(
@@ -333,9 +317,6 @@ export function useAvailableTasks() {
   return useQuery<Task[]>({
     queryKey: ["available-tasks"],
     queryFn: async () => {
-      // getAvailableTasks is a PUBLIC endpoint — works with anonymous actor too.
-      // useActor always returns at least an anonymous actor, so actor should
-      // never be null here. But guard just in case.
       if (!actor) return [];
       try {
         return await actor.getAvailableTasks();
@@ -343,10 +324,8 @@ export function useAvailableTasks() {
         return [];
       }
     },
-    // Always enabled — this is a public endpoint, works without login.
-    // isFetching means the actor is still being created; wait for it.
     enabled: !isFetching,
-    refetchInterval: 10000, // Poll every 10s so new tasks appear quickly
+    refetchInterval: 10000,
   });
 }
 
@@ -506,5 +485,122 @@ export function useRateTask() {
     onError: (err: Error) => {
       toast.error(err.message || "Failed to submit rating");
     },
+  });
+}
+
+// ─── Admin ────────────────────────────────────────────────────────────────────
+
+export function usePlatformStats() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["platform-stats"],
+    queryFn: async () => {
+      if (!actor) return null;
+      try {
+        return await actor.getPlatformStats();
+      } catch {
+        return null;
+      }
+    },
+    enabled: !isFetching,
+    refetchInterval: 15000,
+  });
+}
+
+export function useIsAdmin() {
+  const { actor, isFetching } = useActor();
+  const { identity } = useInternetIdentity();
+  const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
+  return useQuery({
+    queryKey: ["is-admin"],
+    queryFn: async () => {
+      if (!actor || !isAuthenticated) return false;
+      try {
+        return await actor.isCallerAdmin();
+      } catch {
+        return false;
+      }
+    },
+    enabled: !!actor && !isFetching && isAuthenticated,
+    staleTime: 60000,
+  });
+}
+
+export function useAdminCancelTask() {
+  const { actor } = useActor();
+  const { identity } = useInternetIdentity();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (taskId: bigint) => {
+      checkAuthenticated(identity);
+      if (!actor) throw new Error("Not connected");
+      const result = await actor.cancelTask(taskId);
+      if (result.__kind__ === "err") throw new Error(result.err);
+      return result.ok;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["available-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["platform-stats"] });
+      toast.success("Task cancelled by admin. Customer can re-post it.");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to cancel task");
+    },
+  });
+}
+
+export function useAdminBlockUser() {
+  const { actor } = useActor();
+  const { identity } = useInternetIdentity();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (userPrincipal: Principal) => {
+      checkAuthenticated(identity);
+      if (!actor) throw new Error("Not connected");
+      await actor.assignCallerUserRole(userPrincipal, UserRole.guest);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["available-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-users"] });
+      toast.success("User blocked. They can no longer accept tasks.");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to block user");
+    },
+  });
+}
+
+export function useAdminAllTasks() {
+  const { actor, isFetching } = useActor();
+  return useQuery<Task[]>({
+    queryKey: ["admin-all-tasks"],
+    queryFn: async () => {
+      if (!actor) return [];
+      try {
+        return await (actor as any).getAllTasks();
+      } catch {
+        return [];
+      }
+    },
+    enabled: !isFetching,
+    refetchInterval: 10000,
+  });
+}
+
+export function useAdminAllUsers() {
+  const { actor, isFetching } = useActor();
+  return useQuery<PublicUserProfile[]>({
+    queryKey: ["admin-all-users"],
+    queryFn: async () => {
+      if (!actor) return [];
+      try {
+        return await (actor as any).getAllUserProfiles();
+      } catch {
+        return [];
+      }
+    },
+    enabled: !isFetching,
+    refetchInterval: 15000,
   });
 }

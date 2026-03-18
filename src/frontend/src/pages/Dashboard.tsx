@@ -28,6 +28,7 @@ import { motion } from "motion/react";
 import { useState } from "react";
 import { TaskStatus } from "../backend.d";
 import type { Task } from "../backend.d";
+import CashfreePaymentModal from "../components/CashfreePaymentModal";
 import { StarRating } from "../components/StarRating";
 import { TaskProgressTimeline } from "../components/TaskProgressTimeline";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
@@ -51,6 +52,15 @@ function parseStoreLocation(raw: string): {
   return { store: parts[0], contact: parts[1] ?? null };
 }
 
+interface PendingTask {
+  title: string;
+  description: string;
+  amount: bigint;
+  tip: bigint | null;
+  customerLocation: string;
+  storeLocation: string;
+}
+
 function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -59,6 +69,8 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
   const [amountINR, setAmountINR] = useState("");
   const [tipINR, setTipINR] = useState("");
   const [contactNumber, setContactNumber] = useState("");
+  const [showCashfree, setShowCashfree] = useState(false);
+  const [pendingTask, setPendingTask] = useState<PendingTask | null>(null);
 
   const createTask = useCreateTask();
   const { identity, login, isLoggingIn, isInitializing } =
@@ -67,10 +79,11 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
   const navigate = useNavigate();
 
   const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
-  // Show connecting spinner while auth or actor is initializing
   const isConnecting = isInitializing || isActorFetching;
-  // Never show "connection failed" — backend failures are handled gracefully in mutations
   const isConnectionFailed = false;
+
+  const totalINR =
+    (Number.parseFloat(amountINR) || 0) + (Number.parseFloat(tipINR) || 0) + 4; // platform fee
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,7 +106,8 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
       ? `${storeLocation}|||CONTACT:${contactNumber.trim()}`
       : storeLocation;
 
-    await createTask.mutateAsync({
+    // Stage task and open Cashfree payment
+    setPendingTask({
       title,
       description,
       amount: inrToPaise(Number.parseFloat(amountINR)),
@@ -101,8 +115,14 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
       customerLocation,
       storeLocation: encodedStoreLocation,
     });
+    setShowCashfree(true);
+  };
 
-    // Reset
+  const handlePaymentSuccess = async () => {
+    if (!pendingTask) return;
+    setShowCashfree(false);
+    await createTask.mutateAsync(pendingTask);
+    // Reset form
     setTitle("");
     setDescription("");
     setCustomerLocation("");
@@ -110,326 +130,323 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
     setAmountINR("");
     setTipINR("");
     setContactNumber("");
+    setPendingTask(null);
     onSuccess();
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      {/*
-        Banner priority (only one shows at a time):
-        1. Connecting spinner  — backend is initializing AND user is authenticated (or still resolving identity)
-        2. Connection failed   — resolved but actor missing AND user IS authenticated
-        3. Login required      — not connecting, not authenticated (anonymous users see this, NOT the spinner)
-      */}
-
-      {/* 1. Connecting banner — only while initializing, hidden once timed-out for anon users */}
-      {isConnecting && !isConnectionFailed && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          data-ocid="dashboard.connecting_card"
-          className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4"
-        >
-          <Loader2 className="w-5 h-5 text-blue-400 flex-shrink-0 animate-spin" />
-          <p className="text-sm font-semibold text-blue-300">
-            Connecting to backend…
-          </p>
-        </motion.div>
-      )}
-
-      {/* 2. Connection failed banner — actor never loaded despite being logged in */}
-      {isConnectionFailed && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          data-ocid="dashboard.connection_failed_card"
-          className="flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-2xl p-4"
-        >
-          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-red-300">
-              Connection to backend failed
+    <>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {isConnecting && !isConnectionFailed && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            data-ocid="dashboard.connecting_card"
+            className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4"
+          >
+            <Loader2 className="w-5 h-5 text-blue-400 flex-shrink-0 animate-spin" />
+            <p className="text-sm font-semibold text-blue-300">
+              Connecting to backend…
             </p>
-            <p className="text-xs text-red-300/70 mt-0.5">
-              Could not reach the canister. Click Refresh to try again.
-            </p>
+          </motion.div>
+        )}
+
+        {isConnectionFailed && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            data-ocid="dashboard.connection_failed_card"
+            className="flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-2xl p-4"
+          >
+            <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-red-300">
+                Connection to backend failed
+              </p>
+              <p className="text-xs text-red-300/70 mt-0.5">
+                Could not reach the canister. Click Refresh to try again.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              data-ocid="dashboard.connection_failed.retry_button"
+              onClick={() => window.location.reload()}
+              className="flex-shrink-0 bg-red-500 hover:bg-red-400 text-white font-bold rounded-xl text-xs px-3 py-2 h-auto"
+            >
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+              Refresh
+            </Button>
+          </motion.div>
+        )}
+
+        {!isConnecting && !isConnectionFailed && !isAuthenticated && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            data-ocid="dashboard.login_warning_card"
+            className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4"
+          >
+            <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-300">
+                Login required to post tasks
+              </p>
+              <p className="text-xs text-amber-300/70 mt-0.5">
+                You must be logged in to post a task and lock funds in escrow.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              data-ocid="dashboard.login_warning.login_button"
+              onClick={() => navigate({ to: "/login" })}
+              className="flex-shrink-0 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl text-xs px-3 py-2 h-auto"
+            >
+              <LogIn className="w-3.5 h-3.5 mr-1.5" />
+              Login
+            </Button>
+          </motion.div>
+        )}
+
+        <div className="space-y-2">
+          <Label
+            htmlFor="task-title"
+            className="text-sm font-semibold text-foreground"
+          >
+            Task Title *
+          </Label>
+          <Input
+            id="task-title"
+            data-ocid="dashboard.task_title_input"
+            placeholder="e.g., Buy 1kg bananas from D-Mart"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+            className="bg-secondary border-border focus:border-green-vivid/50 focus:ring-green-vivid/20 rounded-xl h-12"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label
+            htmlFor="task-desc"
+            className="text-sm font-semibold text-foreground"
+          >
+            Description *
+          </Label>
+          <Textarea
+            id="task-desc"
+            data-ocid="dashboard.task_description_textarea"
+            placeholder="Describe the task in detail — brand, quantity, any special instructions…"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            required
+            rows={3}
+            className="bg-secondary border-border focus:border-green-vivid/50 focus:ring-green-vivid/20 rounded-xl resize-none"
+          />
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label
+              htmlFor="store-loc"
+              className="text-sm font-semibold text-foreground"
+            >
+              <Store className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
+              Store / Pickup Location *
+            </Label>
+            <Input
+              id="store-loc"
+              placeholder="e.g., D-Mart, Sector 18, Noida"
+              value={storeLocation}
+              onChange={(e) => setStoreLocation(e.target.value)}
+              required
+              className="bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12"
+            />
           </div>
-          <Button
-            type="button"
-            size="sm"
-            data-ocid="dashboard.connection_failed.retry_button"
-            onClick={() => window.location.reload()}
-            className="flex-shrink-0 bg-red-500 hover:bg-red-400 text-white font-bold rounded-xl text-xs px-3 py-2 h-auto"
-          >
-            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-            Refresh
-          </Button>
-        </motion.div>
-      )}
-
-      {/* 3. Login required banner — shown only to unauthenticated users once connecting resolves/times-out */}
-      {!isConnecting && !isConnectionFailed && !isAuthenticated && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          data-ocid="dashboard.login_warning_card"
-          className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4"
-        >
-          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-amber-300">
-              Login required to post tasks
-            </p>
-            <p className="text-xs text-amber-300/70 mt-0.5">
-              You must be logged in to post a task and lock funds in escrow.
-            </p>
+          <div className="space-y-2">
+            <Label
+              htmlFor="customer-loc"
+              className="text-sm font-semibold text-foreground"
+            >
+              <MapPin className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
+              Your Delivery Location *
+            </Label>
+            <Input
+              id="customer-loc"
+              placeholder="e.g., Block B, Sector 62, Noida"
+              value={customerLocation}
+              onChange={(e) => setCustomerLocation(e.target.value)}
+              required
+              className="bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12"
+            />
           </div>
-          <Button
-            type="button"
-            size="sm"
-            data-ocid="dashboard.login_warning.login_button"
-            onClick={() => navigate({ to: "/login" })}
-            className="flex-shrink-0 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl text-xs px-3 py-2 h-auto"
-          >
-            <LogIn className="w-3.5 h-3.5 mr-1.5" />
-            Login
-          </Button>
-        </motion.div>
-      )}
-
-      <div className="space-y-2">
-        <Label
-          htmlFor="task-title"
-          className="text-sm font-semibold text-foreground"
-        >
-          Task Title *
-        </Label>
-        <Input
-          id="task-title"
-          data-ocid="dashboard.task_title_input"
-          placeholder="e.g., Buy 1kg bananas from D-Mart"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-          className="bg-secondary border-border focus:border-green-vivid/50 focus:ring-green-vivid/20 rounded-xl h-12"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label
-          htmlFor="task-desc"
-          className="text-sm font-semibold text-foreground"
-        >
-          Description *
-        </Label>
-        <Textarea
-          id="task-desc"
-          data-ocid="dashboard.task_description_textarea"
-          placeholder="Describe the task in detail — brand, quantity, any special instructions…"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          required
-          rows={3}
-          className="bg-secondary border-border focus:border-green-vivid/50 focus:ring-green-vivid/20 rounded-xl resize-none"
-        />
-      </div>
-
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label
-            htmlFor="store-loc"
-            className="text-sm font-semibold text-foreground"
-          >
-            <Store className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
-            Store / Pickup Location *
-          </Label>
-          <Input
-            id="store-loc"
-            placeholder="e.g., D-Mart, Sector 18, Noida"
-            value={storeLocation}
-            onChange={(e) => setStoreLocation(e.target.value)}
-            required
-            className="bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12"
-          />
         </div>
-        <div className="space-y-2">
-          <Label
-            htmlFor="customer-loc"
-            className="text-sm font-semibold text-foreground"
-          >
-            <MapPin className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
-            Your Delivery Location *
-          </Label>
-          <Input
-            id="customer-loc"
-            placeholder="e.g., Block B, Sector 62, Noida"
-            value={customerLocation}
-            onChange={(e) => setCustomerLocation(e.target.value)}
-            required
-            className="bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12"
-          />
-        </div>
-      </div>
 
-      {/* Contact Number */}
-      <div className="space-y-2">
-        <Label
-          htmlFor="contact-number"
-          className="text-sm font-semibold text-foreground"
-        >
-          <Phone className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
-          Contact Number{" "}
-          <span className="text-muted-foreground font-normal">— optional</span>
-        </Label>
-        <Input
-          id="contact-number"
-          data-ocid="dashboard.contact_number_input"
-          type="tel"
-          placeholder="e.g., +91 98765 43210"
-          value={contactNumber}
-          onChange={(e) => setContactNumber(e.target.value)}
-          className="bg-secondary border-border focus:border-green-vivid/50 focus:ring-green-vivid/20 rounded-xl h-12"
-        />
-        <p className="text-xs text-muted-foreground">
-          Tasker can call you during delivery to coordinate the drop-off
-        </p>
-      </div>
-
-      <div className="grid sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label
-            htmlFor="amount"
+            htmlFor="contact-number"
             className="text-sm font-semibold text-foreground"
           >
-            <IndianRupee className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
-            Amount (₹) *
-          </Label>
-          <Input
-            id="amount"
-            data-ocid="dashboard.task_amount_input"
-            type="number"
-            placeholder="e.g., 249"
-            value={amountINR}
-            onChange={(e) => setAmountINR(e.target.value)}
-            min="1"
-            step="0.01"
-            required
-            className="bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label
-            htmlFor="tip"
-            className="text-sm font-semibold text-foreground"
-          >
-            Tip (₹){" "}
+            <Phone className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
+            Contact Number{" "}
             <span className="text-muted-foreground font-normal">
               — optional
             </span>
           </Label>
           <Input
-            id="tip"
-            type="number"
-            placeholder="e.g., 20"
-            value={tipINR}
-            onChange={(e) => setTipINR(e.target.value)}
-            min="0"
-            step="0.01"
-            className="bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12"
+            id="contact-number"
+            data-ocid="dashboard.contact_number_input"
+            type="tel"
+            placeholder="e.g., +91 98765 43210"
+            value={contactNumber}
+            onChange={(e) => setContactNumber(e.target.value)}
+            className="bg-secondary border-border focus:border-green-vivid/50 focus:ring-green-vivid/20 rounded-xl h-12"
           />
+          <p className="text-xs text-muted-foreground">
+            Tasker can call you during delivery to coordinate the drop-off
+          </p>
         </div>
-      </div>
 
-      {/* Fee note */}
-      {amountINR && (
-        <div className="bg-secondary/50 rounded-xl p-4 text-sm space-y-1 border border-border">
-          <div className="flex justify-between text-muted-foreground">
-            <span>Task amount</span>
-            <span className="text-foreground font-medium">
-              {formatINR(inrToPaise(Number.parseFloat(amountINR) || 0))}
-            </span>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label
+              htmlFor="amount"
+              className="text-sm font-semibold text-foreground"
+            >
+              <IndianRupee className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
+              Amount (₹) *
+            </Label>
+            <Input
+              id="amount"
+              data-ocid="dashboard.task_amount_input"
+              type="number"
+              placeholder="e.g., 249"
+              value={amountINR}
+              onChange={(e) => setAmountINR(e.target.value)}
+              min="1"
+              step="0.01"
+              required
+              className="bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12"
+            />
           </div>
-          {tipINR && (
+          <div className="space-y-2">
+            <Label
+              htmlFor="tip"
+              className="text-sm font-semibold text-foreground"
+            >
+              Tip (₹){" "}
+              <span className="text-muted-foreground font-normal">
+                — optional
+              </span>
+            </Label>
+            <Input
+              id="tip"
+              type="number"
+              placeholder="e.g., 20"
+              value={tipINR}
+              onChange={(e) => setTipINR(e.target.value)}
+              min="0"
+              step="0.01"
+              className="bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12"
+            />
+          </div>
+        </div>
+
+        {amountINR && (
+          <div className="bg-secondary/50 rounded-xl p-4 text-sm space-y-1 border border-border">
             <div className="flex justify-between text-muted-foreground">
-              <span>Tip</span>
+              <span>Task amount</span>
               <span className="text-foreground font-medium">
-                {formatINR(inrToPaise(Number.parseFloat(tipINR) || 0))}
+                {formatINR(inrToPaise(Number.parseFloat(amountINR) || 0))}
               </span>
             </div>
-          )}
-          <div className="flex justify-between text-muted-foreground border-t border-border pt-1">
-            <span>Platform fee</span>
-            <span className="text-foreground font-medium">₹3–5</span>
+            {tipINR && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Tip</span>
+                <span className="text-foreground font-medium">
+                  {formatINR(inrToPaise(Number.parseFloat(tipINR) || 0))}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between text-muted-foreground border-t border-border pt-1">
+              <span>Platform fee</span>
+              <span className="text-foreground font-medium">₹4</span>
+            </div>
+            <div className="flex justify-between font-semibold text-green-vivid border-t border-border pt-1">
+              <span>Total charged (Cashfree Escrow)</span>
+              <span>{formatINR(inrToPaise(totalINR))}</span>
+            </div>
           </div>
-          <div className="flex justify-between font-semibold text-green-vivid border-t border-border pt-1">
-            <span>Total charged upfront</span>
-            <span>
-              {formatINR(
-                inrToPaise(
-                  (Number.parseFloat(amountINR) || 0) +
-                    (Number.parseFloat(tipINR) || 0) +
-                    4,
-                ),
-              )}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Cashfree escrow notice */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-secondary/40 rounded-xl px-3 py-2.5 border border-border/50">
-        <span>💰</span>
-        <span>
-          Task amount held in{" "}
-          <span className="text-foreground font-semibold">escrow</span> •
-          Released to tasker after OTP verification •{" "}
-          <span className="text-foreground font-medium">
-            Secured by Cashfree
-          </span>
-        </span>
-      </div>
-
-      <Button
-        type="submit"
-        size="lg"
-        data-ocid="dashboard.task_submit_button"
-        disabled={createTask.isPending || isLoggingIn || isConnecting}
-        className={`w-full font-bold py-6 transition-all rounded-2xl ${
-          isConnecting
-            ? "bg-secondary text-muted-foreground cursor-wait"
-            : !isAuthenticated
-              ? "bg-amber-500 hover:bg-amber-400 text-black shadow-none"
-              : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-green-sm hover:shadow-green-md"
-        }`}
-      >
-        {isConnecting ? (
-          <>
-            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            Connecting…
-          </>
-        ) : isLoggingIn ? (
-          <>
-            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            Logging in…
-          </>
-        ) : createTask.isPending ? (
-          <>
-            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            Posting Task…
-          </>
-        ) : !isAuthenticated ? (
-          <>
-            <LogIn className="w-5 h-5 mr-2" />
-            Login to Post Task
-          </>
-        ) : (
-          <>
-            <PlusCircle className="w-5 h-5 mr-2" />
-            Post Task (Escrow)
-          </>
         )}
-      </Button>
-    </form>
+
+        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-secondary/40 rounded-xl px-3 py-2.5 border border-border/50">
+          <span>💰</span>
+          <span>
+            Task amount held in{" "}
+            <span className="text-foreground font-semibold">escrow</span> •
+            Released to tasker after OTP verification •{" "}
+            <span className="text-foreground font-medium">
+              Secured by Cashfree
+            </span>
+          </span>
+        </div>
+
+        <Button
+          type="submit"
+          size="lg"
+          data-ocid="dashboard.task_submit_button"
+          disabled={createTask.isPending || isLoggingIn || isConnecting}
+          className={`w-full font-bold py-6 transition-all rounded-2xl ${
+            isConnecting
+              ? "bg-secondary text-muted-foreground cursor-wait"
+              : !isAuthenticated
+                ? "bg-amber-500 hover:bg-amber-400 text-black shadow-none"
+                : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-green-sm hover:shadow-green-md"
+          }`}
+        >
+          {isConnecting ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              Connecting…
+            </>
+          ) : isLoggingIn ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              Logging in…
+            </>
+          ) : createTask.isPending ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              Posting Task…
+            </>
+          ) : !isAuthenticated ? (
+            <>
+              <LogIn className="w-5 h-5 mr-2" />
+              Login to Post Task
+            </>
+          ) : (
+            <>
+              <PlusCircle className="w-5 h-5 mr-2" />
+              Pay & Post Task (Escrow)
+            </>
+          )}
+        </Button>
+      </form>
+
+      {pendingTask && (
+        <CashfreePaymentModal
+          open={showCashfree}
+          amountINR={totalINR}
+          taskTitle={pendingTask.title}
+          onSuccess={handlePaymentSuccess}
+          onClose={() => {
+            setShowCashfree(false);
+            setPendingTask(null);
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -459,7 +476,6 @@ function TaskCard({
       data-ocid={`dashboard.task_item.${index + 1}`}
       className="glass-card rounded-2xl p-5 border-border hover:border-green-vivid/20 transition-all duration-300 space-y-4"
     >
-      {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-foreground truncate">
@@ -472,7 +488,6 @@ function TaskCard({
         <TaskStatusBadge status={task.status} />
       </div>
 
-      {/* Locations */}
       <div className="space-y-1.5">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Store className="w-3.5 h-3.5 flex-shrink-0" />
@@ -492,7 +507,6 @@ function TaskCard({
         )}
       </div>
 
-      {/* Amounts */}
       <div className="flex items-center gap-4">
         <div>
           <p className="text-xs text-muted-foreground">Amount</p>
@@ -508,7 +522,6 @@ function TaskCard({
         )}
       </div>
 
-      {/* OTP — shown prominently when tasker has marked as delivered */}
       {isDelivered && (
         <div className="bg-purple-400/10 border border-purple-400/30 rounded-xl p-4 text-center space-y-2">
           <div className="flex items-center gap-2 justify-center">
@@ -534,7 +547,6 @@ function TaskCard({
         </div>
       )}
 
-      {/* Rating — shown after task is completed */}
       {isCompleted && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -578,10 +590,8 @@ function TaskCard({
         </motion.div>
       )}
 
-      {/* Progress Timeline — shown once accepted */}
       <TaskProgressTimeline task={task} />
 
-      {/* Cancel button — only for posted tasks */}
       {task.status === TaskStatus.posted && (
         <Button
           variant="outline"
@@ -608,7 +618,6 @@ function FindTaskCard({ task, index }: { task: Task; index: number }) {
   const acceptTask = useAcceptTask();
   const navigate = useNavigate();
   const parsed = parseStoreLocation(task.storeLocation);
-
   const total = task.amount + (task.tip ?? 0n);
 
   const handleAccept = () => {
@@ -627,7 +636,6 @@ function FindTaskCard({ task, index }: { task: Task; index: number }) {
       data-ocid={`dashboard.find_task_item.${index + 1}`}
       className="glass-card rounded-2xl p-5 border-border hover:border-green-vivid/25 hover:shadow-green-sm transition-all duration-300 space-y-4"
     >
-      {/* Header row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-foreground">{task.title}</h3>
@@ -647,7 +655,6 @@ function FindTaskCard({ task, index }: { task: Task; index: number }) {
         </div>
       </div>
 
-      {/* Locations */}
       <div className="space-y-1.5">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Store className="w-3.5 h-3.5 text-green-vivid flex-shrink-0" />
@@ -671,7 +678,6 @@ function FindTaskCard({ task, index }: { task: Task; index: number }) {
         )}
       </div>
 
-      {/* Amount breakdown + posted time */}
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
           Base:&nbsp;
@@ -692,7 +698,6 @@ function FindTaskCard({ task, index }: { task: Task; index: number }) {
         )}
       </div>
 
-      {/* Accept button */}
       <Button
         size="sm"
         data-ocid={`dashboard.find_task.accept_button.${index + 1}`}
@@ -731,7 +736,6 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-      {/* Page header */}
       <motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -783,7 +787,6 @@ export default function Dashboard() {
           </TabsTrigger>
         </TabsList>
 
-        {/* My Tasks */}
         <TabsContent value="my-tasks">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-lg">Your Posted Tasks</h2>
@@ -797,7 +800,6 @@ export default function Dashboard() {
               Refresh
             </Button>
           </div>
-
           {isLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
@@ -831,7 +833,6 @@ export default function Dashboard() {
           )}
         </TabsContent>
 
-        {/* Post Task */}
         <TabsContent value="post-task">
           <Card className="bg-card border-border rounded-3xl shadow-card">
             <CardHeader className="pb-2">
@@ -839,7 +840,8 @@ export default function Dashboard() {
                 Post a New Task
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Payment is held in escrow until task is verified complete
+                Pay via Cashfree escrow — funds released only after OTP
+                verification
               </p>
             </CardHeader>
             <CardContent>
@@ -848,9 +850,7 @@ export default function Dashboard() {
           </Card>
         </TabsContent>
 
-        {/* Find Tasks */}
         <TabsContent value="find-tasks">
-          {/* Info banner */}
           <div className="flex items-start gap-3 bg-green-surface/30 border border-green-vivid/20 rounded-2xl p-4 mb-6">
             <Zap className="w-5 h-5 text-green-vivid flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
@@ -870,8 +870,6 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-
-          {/* Header + Refresh */}
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-lg">Available Tasks Near You</h2>
             <Button
@@ -884,8 +882,6 @@ export default function Dashboard() {
               Refresh
             </Button>
           </div>
-
-          {/* Loading skeletons */}
           {loadingAvailable ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
@@ -893,7 +889,6 @@ export default function Dashboard() {
               ))}
             </div>
           ) : availableTasks.length === 0 ? (
-            /* Empty state */
             <div
               data-ocid="dashboard.find_tasks.empty_state"
               className="glass-card rounded-2xl p-12 text-center border-border"
@@ -915,7 +910,6 @@ export default function Dashboard() {
               </Button>
             </div>
           ) : (
-            /* Task list */
             <div className="space-y-4">
               {availableTasks.map((task, i) => (
                 <FindTaskCard key={String(task.id)} task={task} index={i} />

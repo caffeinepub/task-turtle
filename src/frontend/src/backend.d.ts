@@ -116,6 +116,8 @@ export interface backendInterface {
     createCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string): Promise<string>;
     createTask(title: string, description: string, amount: bigint, tip: bigint | null, customerLocation: string, storeLocation: string): Promise<bigint>;
     getAvailableTasks(): Promise<Array<Task>>;
+    getAllTasks(): Promise<Array<Task>>;
+    getAllUserProfiles(): Promise<Array<PublicUserProfile>>;
     getCallerUserProfile(): Promise<PublicUserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getEarningsHistory(): Promise<Array<Task>>;

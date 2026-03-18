@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  ShieldCheck,
   User,
   Wallet,
   X,
@@ -11,10 +12,9 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
+import logoImg from "../assets/task-turtle-logo.png";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
-
-const LOGO_URL =
-  "/assets/generated/task-turtle-logo-transparent.dim_200x200.png";
+import { useIsAdmin } from "../hooks/useQueries";
 
 const navLinks = [
   {
@@ -31,6 +31,7 @@ const navLinks = [
 export default function Navbar() {
   const location = useLocation();
   const { clear, identity } = useInternetIdentity();
+  const { data: isAdmin } = useIsAdmin();
   const [menuOpen, setMenuOpen] = useState(false);
 
   if (!identity) return null;
@@ -43,12 +44,12 @@ export default function Navbar() {
         {/* Logo */}
         <Link to="/dashboard" className="flex items-center gap-2.5 group">
           <img
-            src={LOGO_URL}
+            src={logoImg}
             alt="Task Turtle"
-            className="w-9 h-9 object-contain"
+            className="h-9 w-auto object-contain"
           />
-          <span className="font-display font-bold text-lg text-green-vivid tracking-tight">
-            Task Turtle
+          <span className="text-xl font-black tracking-tight text-foreground group-hover:text-green-vivid transition-colors">
+            TaskTurtle
           </span>
         </Link>
 
@@ -83,6 +84,20 @@ export default function Navbar() {
               </Link>
             );
           })}
+          {isAdmin && (
+            <Link
+              to="/admin"
+              data-ocid="nav.admin_link"
+              className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                currentPath === "/admin"
+                  ? "bg-green-surface text-green-vivid shadow-green-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Admin
+            </Link>
+          )}
         </nav>
 
         {/* Logout */}
@@ -141,6 +156,21 @@ export default function Navbar() {
               </Link>
             );
           })}
+          {isAdmin && (
+            <Link
+              to="/admin"
+              data-ocid="nav.admin_link"
+              onClick={() => setMenuOpen(false)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                currentPath === "/admin"
+                  ? "bg-green-surface text-green-vivid"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Admin
+            </Link>
+          )}
           <button
             type="button"
             data-ocid="nav.logout_button"
