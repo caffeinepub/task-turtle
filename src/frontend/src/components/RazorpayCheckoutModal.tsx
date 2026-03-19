@@ -18,12 +18,6 @@ interface RazorpayCheckoutModalProps {
 const QUICK_AMOUNTS = [100, 200, 500, 1000];
 const RAZORPAY_KEY_ID = "rzp_live_SRNbTwyEmzQSvO";
 
-declare global {
-  interface Window {
-    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
-  }
-}
-
 function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
     if (document.getElementById("razorpay-script")) {
@@ -46,6 +40,7 @@ export default function RazorpayCheckoutModal({
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
   const [loading, setLoading] = useState(false);
+  const [dialogVisible, setDialogVisible] = useState(true);
 
   const finalAmount =
     selectedAmount ?? (customAmount ? Number(customAmount) : 0);
@@ -72,23 +67,31 @@ export default function RazorpayCheckoutModal({
       theme: { color: "#22c55e" },
       handler: () => {
         toast.success(`₹${finalAmount} added to wallet successfully!`);
+        setDialogVisible(true);
         onClose();
         setLoading(false);
       },
       modal: {
+        backdropclose: false,
         ondismiss: () => {
           setLoading(false);
+          setDialogVisible(true);
         },
       },
     };
     try {
       const rzp = new window.Razorpay(options);
+      // Hide our dialog before opening Razorpay so overlay doesn't block touches
+      setDialogVisible(false);
       rzp.open();
     } catch {
       toast.error("Failed to open Razorpay checkout");
       setLoading(false);
+      setDialogVisible(true);
     }
   };
+
+  if (!dialogVisible) return null;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>

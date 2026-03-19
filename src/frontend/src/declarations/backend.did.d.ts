@@ -92,9 +92,31 @@ export interface http_request_result {
   'body' : Uint8Array,
   'headers' : Array<http_header>,
 }
+export type PaymentStatus = { 'success' : null } | { 'failed' : null } | { 'pending' : null };
+export interface PaymentLog {
+  'id' : bigint,
+  'taskId' : bigint,
+  'userPaid' : bigint,
+  'taskerEarnings' : bigint,
+  'platformFee' : bigint,
+  'status' : PaymentStatus,
+  'date' : bigint,
+}
+export type PayoutStatus = { 'pending' : null } | { 'paid' : null };
+export type PayoutMethod = { 'upi' : null } | { 'cash' : null };
+export interface PayoutRecord {
+  'taskId' : bigint,
+  'taskerId' : Principal,
+  'amount' : bigint,
+  'status' : PayoutStatus,
+  'method' : [] | [PayoutMethod],
+  'createdDate' : bigint,
+  'paidDate' : [] | [bigint],
+}
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'acceptTask' : ActorMethod<[bigint], TaskResult>,
+  'adminCancelTask' : ActorMethod<[bigint], TaskResult>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'cancelTask' : ActorMethod<[bigint], TaskResult>,
   'createCheckoutSession' : ActorMethod<
@@ -111,14 +133,19 @@ export interface _SERVICE {
   'getEarningsHistory' : ActorMethod<[], Array<Task>>,
   'getMyAcceptedTasks' : ActorMethod<[], Array<Task>>,
   'getMyPostedTasks' : ActorMethod<[], Array<Task>>,
+  'getPaymentLogs' : ActorMethod<[], Array<PaymentLog>>,
+  'getPayoutRecords' : ActorMethod<[], Array<PayoutRecord>>,
   'getPlatformStats' : ActorMethod<[], TaskStats>,
   'getRatingCount' : ActorMethod<[Principal], bigint>,
   'getStripeSessionStatus' : ActorMethod<[string], StripeSessionStatus>,
   'getTaskById' : ActorMethod<[bigint], TaskResult>,
   'getUserProfile' : ActorMethod<[Principal], PublicUserProfile>,
   'getWalletBalance' : ActorMethod<[], bigint>,
+  'getAllTasks' : ActorMethod<[], Array<Task>>,
+  'getAllUserProfiles' : ActorMethod<[], Array<PublicUserProfile>>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'isStripeConfigured' : ActorMethod<[], boolean>,
+  'markPayoutPaid' : ActorMethod<[bigint, PayoutMethod], boolean>,
   'markTaskDelivered' : ActorMethod<[bigint], TaskResult>,
   'markTaskInProgress' : ActorMethod<[bigint], TaskResult>,
   'rateTask' : ActorMethod<[bigint, bigint], boolean>,

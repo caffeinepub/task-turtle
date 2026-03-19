@@ -99,10 +99,42 @@ export const TaskUpdateRequest = IDL.Record({
   'storeLocation' : IDL.Text,
   'amount' : IDL.Nat,
 });
+export const PaymentStatus = IDL.Variant({
+  'success' : IDL.Null,
+  'failed' : IDL.Null,
+  'pending' : IDL.Null,
+});
+export const PaymentLog = IDL.Record({
+  'id' : IDL.Nat,
+  'taskId' : IDL.Nat,
+  'userPaid' : IDL.Nat,
+  'taskerEarnings' : IDL.Nat,
+  'platformFee' : IDL.Nat,
+  'status' : PaymentStatus,
+  'date' : IDL.Int,
+});
+export const PayoutStatus = IDL.Variant({
+  'pending' : IDL.Null,
+  'paid' : IDL.Null,
+});
+export const PayoutMethod = IDL.Variant({
+  'upi' : IDL.Null,
+  'cash' : IDL.Null,
+});
+export const PayoutRecord = IDL.Record({
+  'taskId' : IDL.Nat,
+  'taskerId' : IDL.Principal,
+  'amount' : IDL.Nat,
+  'status' : PayoutStatus,
+  'method' : IDL.Opt(PayoutMethod),
+  'createdDate' : IDL.Int,
+  'paidDate' : IDL.Opt(IDL.Int),
+});
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'acceptTask' : IDL.Func([IDL.Nat], [TaskResult], []),
+  'adminCancelTask' : IDL.Func([IDL.Nat], [TaskResult], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'cancelTask' : IDL.Func([IDL.Nat], [TaskResult], []),
   'createCheckoutSession' : IDL.Func(
@@ -125,14 +157,19 @@ export const idlService = IDL.Service({
   'getEarningsHistory' : IDL.Func([], [IDL.Vec(Task)], ['query']),
   'getMyAcceptedTasks' : IDL.Func([], [IDL.Vec(Task)], ['query']),
   'getMyPostedTasks' : IDL.Func([], [IDL.Vec(Task)], ['query']),
+  'getPaymentLogs' : IDL.Func([], [IDL.Vec(PaymentLog)], ['query']),
+  'getPayoutRecords' : IDL.Func([], [IDL.Vec(PayoutRecord)], ['query']),
   'getPlatformStats' : IDL.Func([], [TaskStats], ['query']),
   'getRatingCount' : IDL.Func([IDL.Principal], [IDL.Nat], ['query']),
   'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
   'getTaskById' : IDL.Func([IDL.Nat], [TaskResult], ['query']),
   'getUserProfile' : IDL.Func([IDL.Principal], [PublicUserProfile], ['query']),
   'getWalletBalance' : IDL.Func([], [IDL.Nat], ['query']),
+  'getAllTasks' : IDL.Func([], [IDL.Vec(Task)], ['query']),
+  'getAllUserProfiles' : IDL.Func([], [IDL.Vec(PublicUserProfile)], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
+  'markPayoutPaid' : IDL.Func([IDL.Nat, PayoutMethod], [IDL.Bool], []),
   'markTaskDelivered' : IDL.Func([IDL.Nat], [TaskResult], []),
   'markTaskInProgress' : IDL.Func([IDL.Nat], [TaskResult], []),
   'rateTask' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Bool], []),
@@ -243,10 +280,42 @@ export const idlFactory = ({ IDL }) => {
     'storeLocation' : IDL.Text,
     'amount' : IDL.Nat,
   });
+  const PaymentStatus = IDL.Variant({
+    'success' : IDL.Null,
+    'failed' : IDL.Null,
+    'pending' : IDL.Null,
+  });
+  const PaymentLog = IDL.Record({
+    'id' : IDL.Nat,
+    'taskId' : IDL.Nat,
+    'userPaid' : IDL.Nat,
+    'taskerEarnings' : IDL.Nat,
+    'platformFee' : IDL.Nat,
+    'status' : PaymentStatus,
+    'date' : IDL.Int,
+  });
+  const PayoutStatus = IDL.Variant({
+    'pending' : IDL.Null,
+    'paid' : IDL.Null,
+  });
+  const PayoutMethod = IDL.Variant({
+    'upi' : IDL.Null,
+    'cash' : IDL.Null,
+  });
+  const PayoutRecord = IDL.Record({
+    'taskId' : IDL.Nat,
+    'taskerId' : IDL.Principal,
+    'amount' : IDL.Nat,
+    'status' : PayoutStatus,
+    'method' : IDL.Opt(PayoutMethod),
+    'createdDate' : IDL.Int,
+    'paidDate' : IDL.Opt(IDL.Int),
+  });
   
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'acceptTask' : IDL.Func([IDL.Nat], [TaskResult], []),
+    'adminCancelTask' : IDL.Func([IDL.Nat], [TaskResult], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'cancelTask' : IDL.Func([IDL.Nat], [TaskResult], []),
     'createCheckoutSession' : IDL.Func(
@@ -269,6 +338,8 @@ export const idlFactory = ({ IDL }) => {
     'getEarningsHistory' : IDL.Func([], [IDL.Vec(Task)], ['query']),
     'getMyAcceptedTasks' : IDL.Func([], [IDL.Vec(Task)], ['query']),
     'getMyPostedTasks' : IDL.Func([], [IDL.Vec(Task)], ['query']),
+    'getPaymentLogs' : IDL.Func([], [IDL.Vec(PaymentLog)], ['query']),
+    'getPayoutRecords' : IDL.Func([], [IDL.Vec(PayoutRecord)], ['query']),
     'getPlatformStats' : IDL.Func([], [TaskStats], ['query']),
     'getRatingCount' : IDL.Func([IDL.Principal], [IDL.Nat], ['query']),
     'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
@@ -279,8 +350,11 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getWalletBalance' : IDL.Func([], [IDL.Nat], ['query']),
+    'getAllTasks' : IDL.Func([], [IDL.Vec(Task)], ['query']),
+    'getAllUserProfiles' : IDL.Func([], [IDL.Vec(PublicUserProfile)], ['query']),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
+    'markPayoutPaid' : IDL.Func([IDL.Nat, PayoutMethod], [IDL.Bool], []),
     'markTaskDelivered' : IDL.Func([IDL.Nat], [TaskResult], []),
     'markTaskInProgress' : IDL.Func([IDL.Nat], [TaskResult], []),
     'rateTask' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Bool], []),

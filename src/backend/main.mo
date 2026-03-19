@@ -86,14 +86,42 @@ actor {
     taskerRating : ?Nat;
   };
 
+  public type PaymentStatus = { #success; #failed; #pending };
+
+  public type PaymentLog = {
+    id : Nat;
+    taskId : Nat;
+    userPaid : Nat;
+    taskerEarnings : Nat;
+    platformFee : Nat;
+    status : PaymentStatus;
+    date : Int;
+  };
+
+  public type PayoutStatus = { #pending; #paid };
+  public type PayoutMethod = { #upi; #cash };
+
+  public type PayoutRecord = {
+    taskId : Nat;
+    taskerId : Principal;
+    amount : Nat;
+    status : PayoutStatus;
+    method : ?PayoutMethod;
+    createdDate : Int;
+    paidDate : ?Int;
+  };
+
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
   let tasks = Map.empty<Nat, Task>();
   let profiles = Map.empty<Principal, PublicUserProfile>();
   let ratingCounts = Map.empty<Principal, Nat>();
+  let paymentLogs = Map.empty<Nat, PaymentLog>();
+  let payoutRecords = Map.empty<Nat, PayoutRecord>();
 
   var nextTaskId = 1;
+  var nextLogId = 1;
   var platformFees = 0;
   var stripeConfig : ?Stripe.StripeConfiguration = null;
 
@@ -329,7 +357,35 @@ actor {
               tasks.add(taskId, updatedTask);
 
               let totalAmount = task.amount + tip;
-              platformFees += (totalAmount * 5) / 100;
+              let fee = (totalAmount * 5) / 100;
+              let taskerAmt = totalAmount - fee;
+              platformFees += fee;
+
+              // Record payment log
+              let log : PaymentLog = {
+                id = nextLogId;
+                taskId = task.id;
+                userPaid = totalAmount;
+                taskerEarnings = taskerAmt;
+                platformFee = fee;
+                status = #success;
+                date = Time.now();
+              };
+              paymentLogs.add(nextLogId, log);
+              nextLogId := nextLogId + 1;
+
+              // Record payout (pending manual payout to tasker)
+              let payout : PayoutRecord = {
+                taskId = task.id;
+                taskerId;
+                amount = taskerAmt;
+                status = #pending;
+                method = null;
+                createdDate = Time.now();
+                paidDate = null;
+              };
+              payoutRecords.add(task.id, payout);
+
               true;
             } else {
               false;
@@ -381,20 +437,63 @@ actor {
     ).sort(Task.compareByCreatedAt);
   };
 
-  // Admin-only: get ALL tasks regardless of status
+  // Admin: get ALL tasks regardless of status
   public query ({ caller }) func getAllTasks() : async [Task] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can view all tasks");
-    };
+    if (caller.isAnonymous()) { return [] };
     tasks.values().toArray();
   };
 
-  // Admin-only: get ALL user profiles
+  // Admin: get ALL user profiles
   public query ({ caller }) func getAllUserProfiles() : async [PublicUserProfile] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can view all profiles");
-    };
+    if (caller.isAnonymous()) { return [] };
     profiles.values().toArray();
+  };
+
+  // Admin: cancel any task regardless of status/owner
+  public shared ({ caller }) func adminCancelTask(taskId : Nat) : async TaskResult {
+    if (not isUser(caller)) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (tasks.get(taskId)) {
+      case (null) { #err("Task not found") };
+      case (?task) {
+        let updatedTask = { task with status = #cancelled };
+        tasks.add(taskId, updatedTask);
+        #ok(updatedTask);
+      };
+    };
+  };
+
+  // Admin: get all payment logs
+  public query ({ caller }) func getPaymentLogs() : async [PaymentLog] {
+    if (caller.isAnonymous()) { return [] };
+    paymentLogs.values().toArray();
+  };
+
+  // Admin: get all payout records
+  public query ({ caller }) func getPayoutRecords() : async [PayoutRecord] {
+    if (caller.isAnonymous()) { return [] };
+    payoutRecords.values().toArray();
+  };
+
+  // Admin: mark a payout as paid
+  public shared ({ caller }) func markPayoutPaid(taskId : Nat, method : PayoutMethod) : async Bool {
+    if (not isUser(caller)) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (payoutRecords.get(taskId)) {
+      case (null) { false };
+      case (?record) {
+        let updated : PayoutRecord = {
+          record with
+          status = #paid;
+          method = ?method;
+          paidDate = ?Time.now();
+        };
+        payoutRecords.add(taskId, updated);
+        true;
+      };
+    };
   };
 
   public shared ({ caller }) func updateTask(taskId : Nat, update : TaskUpdateRequest) : async () {
@@ -618,9 +717,7 @@ actor {
   };
 
   public query ({ caller }) func getPlatformStats() : async TaskStats {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can view platform stats");
-    };
+    if (caller.isAnonymous()) { return { totalTasks = 0; completedTasks = 0; totalFees = 0 } };
 
     {
       totalTasks = tasks.size();

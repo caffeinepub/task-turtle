@@ -13,7 +13,13 @@ const RAZORPAY_KEY_ID = "rzp_live_SRNbTwyEmzQSvO";
 
 declare global {
   interface Window {
-    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Razorpay: new (
+      options: Record<string, unknown>,
+    ) => {
+      open: () => void;
+      on: (event: string, cb: (resp: any) => void) => void;
+    };
   }
 }
 
@@ -48,6 +54,8 @@ export default function CashfreePaymentModal({
   onClose,
 }: CashfreePaymentModalProps) {
   const [loading, setLoading] = useState(false);
+  // hide our dialog once razorpay sheet is open so it doesn't block touches
+  const [dialogVisible, setDialogVisible] = useState(true);
 
   const handlePay = async () => {
     setLoading(true);
@@ -67,29 +75,46 @@ export default function CashfreePaymentModal({
       name: "Task Turtle",
       description: `Escrow: ${taskTitle}`,
       theme: { color: "#22c55e" },
-      handler: () => {
+      handler: (response: Record<string, string>) => {
+        console.log("Razorpay payment success", response);
         toast.success(
           `₹${amountINR} escrowed successfully! Posting your task…`,
         );
         setLoading(false);
+        setDialogVisible(true);
         onSuccess();
         onClose();
       },
       modal: {
+        // keep backdrop transparent so our dialog area doesn't layer
+        backdropclose: false,
         ondismiss: () => {
           setLoading(false);
+          setDialogVisible(true);
         },
       },
     };
 
     try {
       const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", (response: Record<string, unknown>) => {
+        console.error("Razorpay payment failed", response);
+        toast.error("Payment failed. Please try again.");
+        setLoading(false);
+        setDialogVisible(true);
+      });
+      // Hide our dialog BEFORE opening Razorpay so it doesn't block touches
+      setDialogVisible(false);
       rzp.open();
     } catch {
       toast.error("Failed to open payment. Please try again.");
       setLoading(false);
+      setDialogVisible(true);
     }
   };
+
+  // When our dialog is hidden (razorpay open), render nothing so overlay is gone
+  if (!dialogVisible) return null;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !loading && onClose()}>

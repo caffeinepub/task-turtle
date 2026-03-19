@@ -1,36 +1,43 @@
-# Task Turtle
+# Task Turtle – Admin Control Dashboard Overhaul
 
 ## Current State
-- Stripe integrated for wallet top-up (`createCheckoutSession`, `isStripeConfigured`, `setStripeConfiguration` in backend)
-- `useCreateCheckoutSession` hook calls Stripe API via backend actor
-- WalletPage has "Add Funds" button that opens Stripe checkout
-- Escrow is handled internally by Motoko wallet balance system
+- Admin dashboard exists (`AdminDashboard.tsx`, 1114 lines) with 4 tabs: Overview, All Tasks, Taskers, All Users
+- Backend has: `getAllTasks()`, `getAllUserProfiles()`, `getPlatformStats()`, `cancelTask()` (user-only, not admin)
+- No payment tracking table, no payout management system
+- cancelTask() only allows task owner to cancel, not admin
+- No payment logs stored in backend
+- No payout records or manual payout tracking
 
 ## Requested Changes (Diff)
 
 ### Add
-- Razorpay checkout.js SDK loaded via script tag
-- `useRazorpayCheckout` hook: opens Razorpay checkout modal with UPI/card/netbanking options
-- Amount selection UI (₹100, ₹200, ₹500, ₹1000, custom) before Razorpay opens
-- Cashfree escrow branding on task posting flow ("Payment secured by Cashfree Escrow")
-- Transaction state: pending → processing → success/failed UI in wallet page
-- `RazorpayCheckoutModal` component: amount picker + Razorpay SDK integration
+- Backend: `adminCancelTask(taskId)` – admin can cancel any task regardless of status/owner
+- Backend: `PaymentLog` type + `paymentLogs` stable map to record every payment event
+- Backend: `addPaymentLog(taskId, userPaid, taskerEarnings, platformFee, status)` for internal recording
+- Backend: `getPaymentLogs()` – admin query to fetch all payment records
+- Backend: `PayoutRecord` type + `payoutRecords` stable map
+- Backend: `getPendingPayouts()` – admin query returns all payout records
+- Backend: `markPayoutPaid(taskId, method, date)` – admin marks a payout as Paid
+- Frontend: Full rewrite of AdminDashboard with 6 tabs: Overview, Tasks, Users, Taskers, Payments, Payouts
+- Frontend: Tasks table with Task ID, Title, Description, Posted By, Price, Status, Created Date; clickable rows; Cancel with confirmation dialog
+- Frontend: Users table with Name, Phone, Email, Tasks Posted, Amount Spent, Wallet Balance; click → profile modal with task + payment history
+- Frontend: Taskers table with Name, Phone, Completed Tasks, Active Tasks, Total Earnings, Pending Payout; click → profile modal
+- Frontend: Payments table with Task ID, User Paid, Tasker Earnings, Platform Fee, Status, Date
+- Frontend: Payouts table with Task ID, Tasker Name, Amount, Status (Pending/Paid), Method (UPI/Cash), Date; Mark as Paid action
+- Frontend: Search + filter (by status, date range) on all tables
+- Frontend: Pagination (20 rows per page) on all tables
+- Frontend: Dark theme consistent with existing green+black design
 
 ### Modify
-- WalletPage: replace Stripe "Add Funds" button with Razorpay flow
-- `useCreateCheckoutSession` → replace with `useRazorpayCheckout` (frontend-only SDK call)
-- Dashboard task posting form: add "Payment will be held in Cashfree Escrow" note
-- Remove all Stripe references in frontend UI and hooks
+- `cancelTask()` backend: add admin bypass path OR create separate `adminCancelTask()`
+- AdminDashboard.tsx: full replacement with new 6-tab structure
 
 ### Remove
-- `useCreateCheckoutSession` hook (Stripe-specific)
-- All Stripe branding/references from frontend
-- Stripe success/cancel URL query param handling
+- Old summary-only overview in admin (replace with richer stats cards + tables)
 
 ## Implementation Plan
-1. Remove `useCreateCheckoutSession` from useQueries.ts, replace with `useRazorpayCheckout` that loads Razorpay checkout.js and opens modal
-2. Create `RazorpayCheckoutModal` component with amount picker (₹100/200/500/1000/custom)
-3. Update WalletPage to use new Razorpay modal instead of Stripe button
-4. Add Cashfree escrow notice to Dashboard task posting form
-5. Remove Stripe success/cancel URL param handling
-6. NOTE: Backend APIs unchanged - wallet balance still managed by Motoko canister
+1. Update `main.mo`: add PaymentLog type, PayoutRecord type, adminCancelTask, getPaymentLogs, getPendingPayouts, markPayoutPaid; auto-create payout record when task completed
+2. Regenerate backend bindings (backend.d.ts)
+3. Rewrite AdminDashboard.tsx with 6 fully functional tabs, tables, search, filter, pagination, modals
+4. Wire all backend calls using actor methods from declarations
+5. Validate (lint, typecheck, build)
