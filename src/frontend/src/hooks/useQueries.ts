@@ -573,34 +573,44 @@ export function useAdminBlockUser() {
 
 export function useAdminAllTasks() {
   const { actor, isFetching } = useActor();
+  const { identity } = useInternetIdentity();
+  const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
   return useQuery<Task[]>({
     queryKey: ["admin-all-tasks"],
     queryFn: async () => {
       if (!actor) return [];
       try {
-        return await (actor as any).getAllTasks();
-      } catch {
+        const result = await (actor as any).getAllTasks();
+        return Array.isArray(result) ? result : [];
+      } catch (e) {
+        console.error("getAllTasks error:", e);
         return [];
       }
     },
-    enabled: !isFetching,
+    enabled: !!actor && !isFetching && isAuthenticated,
     refetchInterval: 10000,
+    staleTime: 0,
   });
 }
 
 export function useAdminAllUsers() {
   const { actor, isFetching } = useActor();
+  const { identity } = useInternetIdentity();
+  const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
   return useQuery<PublicUserProfile[]>({
     queryKey: ["admin-all-users"],
     queryFn: async () => {
       if (!actor) return [];
       try {
-        return await (actor as any).getAllUserProfiles();
-      } catch {
+        const result = await (actor as any).getAllUserProfiles();
+        return Array.isArray(result) ? result : [];
+      } catch (e) {
+        console.error("getAllUserProfiles error:", e);
         return [];
       }
     },
-    enabled: !isFetching,
+    enabled: !!actor && !isFetching && isAuthenticated,
     refetchInterval: 15000,
+    staleTime: 0,
   });
 }
