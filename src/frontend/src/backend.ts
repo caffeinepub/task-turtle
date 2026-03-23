@@ -105,6 +105,30 @@ export interface TaskStats {
     totalTasks: bigint;
     completedTasks: bigint;
     totalFees: bigint;
+    totalUsers: bigint;
+    activeTasks: bigint;
+    cancelledTasks: bigint;
+}
+export type PaymentStatus = { __kind__: "success" } | { __kind__: "failed" } | { __kind__: "pending" };
+export interface PaymentLog {
+    id: bigint;
+    taskId: bigint;
+    userPaid: bigint;
+    taskerEarnings: bigint;
+    platformFee: bigint;
+    status: PaymentStatus;
+    date: bigint;
+}
+export type PayoutStatus = { __kind__: "pending" } | { __kind__: "paid" };
+export type PayoutMethod = { __kind__: "upi" } | { __kind__: "cash" };
+export interface PayoutRecord {
+    taskId: bigint;
+    taskerId: Principal;
+    amount: bigint;
+    status: PayoutStatus;
+    method?: PayoutMethod;
+    createdDate: bigint;
+    paidDate?: bigint;
 }
 export interface Task {
     id: bigint;
@@ -142,6 +166,7 @@ export interface PublicUserProfile {
     phone?: string;
     location: string;
     walletBalance: bigint;
+    upiId?: string;
 }
 export interface TaskUpdateRequest {
     tip?: bigint;
@@ -218,8 +243,14 @@ export interface backendInterface {
     saveCallerUserProfile(profile: PublicUserProfile): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
-    updateProfile(name: string, phone: string | null, location: string, isAvailableAsTasker: boolean): Promise<void>;
+    updateProfile(name: string, phone: string | null, location: string, isAvailableAsTasker: boolean, upiId: string | null): Promise<void>;
     updateTask(taskId: bigint, update: TaskUpdateRequest): Promise<void>;
+    adminCancelTask(taskId: bigint): Promise<TaskResult>;
+    getAllTasks(): Promise<Array<Task>>;
+    getAllUserProfiles(): Promise<Array<PublicUserProfile>>;
+    getPaymentLogs(): Promise<Array<PaymentLog>>;
+    getPayoutRecords(): Promise<Array<PayoutRecord>>;
+    markPayoutPaid(taskId: bigint, method: PayoutMethod): Promise<boolean>;
     verifyOtp(taskId: bigint, otp: bigint): Promise<boolean>;
 }
 import type { PublicUserProfile as _PublicUserProfile, StripeSessionStatus as _StripeSessionStatus, Task as _Task, TaskResult as _TaskResult, TaskStatus as _TaskStatus, TaskUpdateRequest as _TaskUpdateRequest, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
@@ -589,17 +620,17 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async updateProfile(arg0: string, arg1: string | null, arg2: string, arg3: boolean): Promise<void> {
+    async updateProfile(arg0: string, arg1: string | null, arg2: string, arg3: boolean, arg4: string | null): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor.updateProfile(arg0, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg1), arg2, arg3);
+                const result = await this.actor.updateProfile(arg0, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg1), arg2, arg3, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg4));
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.updateProfile(arg0, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg1), arg2, arg3);
+            const result = await this.actor.updateProfile(arg0, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg1), arg2, arg3, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg4));
             return result;
         }
     }
@@ -630,6 +661,64 @@ export class Backend implements backendInterface {
             const result = await this.actor.verifyOtp(arg0, arg1);
             return result;
         }
+    }
+    async adminCancelTask(arg0: bigint): Promise<TaskResult> {
+        const actor = this.actor as any;
+        if (this.processError) {
+            try {
+                const result = await actor.adminCancelTask(arg0);
+                return from_candid_TaskResult_n1(this._uploadFile, this._downloadFile, result);
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await actor.adminCancelTask(arg0);
+            return from_candid_TaskResult_n1(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getAllTasks(): Promise<Array<Task>> {
+        const actor = this.actor as any;
+        if (this.processError) {
+            try {
+                const result = await actor.getAllTasks();
+                return result.map((t: any) => from_candid_Task_n3(this._uploadFile, this._downloadFile, t));
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await actor.getAllTasks();
+            return result.map((t: any) => from_candid_Task_n3(this._uploadFile, this._downloadFile, t));
+        }
+    }
+    async getAllUserProfiles(): Promise<Array<PublicUserProfile>> {
+        const actor = this.actor as any;
+        if (this.processError) {
+            try {
+                const result = await actor.getAllUserProfiles();
+                return result.map((p: any) => from_candid_PublicUserProfile_n15(this._uploadFile, this._downloadFile, p));
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await actor.getAllUserProfiles();
+            return result.map((p: any) => from_candid_PublicUserProfile_n15(this._uploadFile, this._downloadFile, p));
+        }
+    }
+    async getPaymentLogs(): Promise<Array<PaymentLog>> {
+        const actor = this.actor as any;
+        if (this.processError) {
+            try { return await actor.getPaymentLogs(); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await actor.getPaymentLogs(); }
+    }
+    async getPayoutRecords(): Promise<Array<PayoutRecord>> {
+        const actor = this.actor as any;
+        if (this.processError) {
+            try { return await actor.getPayoutRecords(); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await actor.getPayoutRecords(); }
+    }
+    async markPayoutPaid(arg0: bigint, arg1: PayoutMethod): Promise<boolean> {
+        const actor = this.actor as any;
+        const candid_method = arg1.__kind__ === "upi" ? { upi: null } : { cash: null };
+        if (this.processError) {
+            try { return await actor.markPayoutPaid(arg0, candid_method); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await actor.markPayoutPaid(arg0, candid_method); }
     }
 }
 function from_candid_PublicUserProfile_n15(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _PublicUserProfile): PublicUserProfile {
@@ -673,6 +762,7 @@ function from_candid_record_n16(_uploadFile: (file: ExternalBlob) => Promise<Uin
     phone: [] | [string];
     location: string;
     walletBalance: bigint;
+    upiId: [] | [string];
 }): {
     id: Principal;
     name: string;
@@ -681,6 +771,7 @@ function from_candid_record_n16(_uploadFile: (file: ExternalBlob) => Promise<Uin
     phone?: string;
     location: string;
     walletBalance: bigint;
+    upiId?: string;
 } {
     return {
         id: value.id,
@@ -689,7 +780,8 @@ function from_candid_record_n16(_uploadFile: (file: ExternalBlob) => Promise<Uin
         rating: value.rating,
         phone: record_opt_to_undefined(from_candid_opt_n17(_uploadFile, _downloadFile, value.phone)),
         location: value.location,
-        walletBalance: value.walletBalance
+        walletBalance: value.walletBalance,
+        upiId: record_opt_to_undefined(from_candid_opt_n17(_uploadFile, _downloadFile, value.upiId))
     };
 }
 function from_candid_record_n22(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
@@ -859,6 +951,7 @@ function to_candid_record_n24(_uploadFile: (file: ExternalBlob) => Promise<Uint8
     phone?: string;
     location: string;
     walletBalance: bigint;
+    upiId?: string;
 }): {
     id: Principal;
     name: string;
@@ -867,6 +960,7 @@ function to_candid_record_n24(_uploadFile: (file: ExternalBlob) => Promise<Uint8
     phone: [] | [string];
     location: string;
     walletBalance: bigint;
+    upiId: [] | [string];
 } {
     return {
         id: value.id,
@@ -875,7 +969,8 @@ function to_candid_record_n24(_uploadFile: (file: ExternalBlob) => Promise<Uint8
         rating: value.rating,
         phone: value.phone ? candid_some(value.phone) : candid_none(),
         location: value.location,
-        walletBalance: value.walletBalance
+        walletBalance: value.walletBalance,
+        upiId: value.upiId ? candid_some(value.upiId) : candid_none()
     };
 }
 function to_candid_record_n27(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {

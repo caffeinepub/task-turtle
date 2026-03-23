@@ -24,11 +24,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  AlertCircle,
   BanknoteIcon,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Copy,
   CreditCard,
   IndianRupee,
   Loader2,
@@ -45,8 +47,16 @@ import {
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
+import type React from "react";
 import { useEffect, useMemo, useState } from "react";
-import type { PublicUserProfile, Task } from "../backend.d";
+import { toast } from "sonner";
+import type {
+  PaymentLog,
+  PayoutMethod,
+  PayoutRecord,
+  PublicUserProfile,
+  Task,
+} from "../backend.d";
 import { TaskStatus } from "../backend.d";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import {
@@ -54,6 +64,9 @@ import {
   useAdminAllUsers,
   useAdminBlockUser,
   useAdminCancelTask,
+  useAdminMarkPayoutPaid,
+  useAdminPaymentLogs,
+  useAdminPayoutRecords,
   useIsAdmin,
   usePlatformStats,
 } from "../hooks/useQueries";
@@ -69,17 +82,6 @@ type AdminTab =
   | "payments"
   | "payouts";
 
-type PayoutEntry = {
-  id: string;
-  taskId: string;
-  taskerName: string;
-  amount: bigint;
-  status: "pending" | "paid";
-  method: "upi" | "cash" | null;
-  createdDate: number;
-  paidDate: number | null;
-};
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function truncatePrincipal(p: string): string {
@@ -93,42 +95,6 @@ function getUserName(
 ): string {
   const p = profiles.find((u) => u.id.toString() === principalId);
   return p?.name || truncatePrincipal(principalId);
-}
-
-function getPaymentStatus(status: TaskStatus): { label: string; cls: string } {
-  if (status === TaskStatus.completed)
-    return {
-      label: "Success",
-      cls: "bg-green-surface text-green-vivid border-green-vivid/30",
-    };
-  if (status === TaskStatus.cancelled)
-    return {
-      label: "Failed",
-      cls: "bg-red-500/15 text-red-400 border-red-400/30",
-    };
-  return {
-    label: "Pending",
-    cls: "bg-yellow-500/15 text-yellow-400 border-yellow-400/30",
-  };
-}
-
-const PAYOUT_STORAGE_KEY = "tt_admin_payouts";
-
-function loadPayouts(): PayoutEntry[] {
-  try {
-    const raw = localStorage.getItem(PAYOUT_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function savePayouts(entries: PayoutEntry[]): void {
-  try {
-    localStorage.setItem(PAYOUT_STORAGE_KEY, JSON.stringify(entries));
-  } catch {
-    // ignore
-  }
 }
 
 // ─── UI primitives ───────────────────────────────────────────────────────────
@@ -189,10 +155,26 @@ function StarRating({ rating }: { rating: bigint }) {
 
 const PLACEHOLDER_CELLS_7 = ["c1", "c2", "c3", "c4", "c5", "c6", "c7"];
 const PLACEHOLDER_CELLS_8 = ["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"];
+const PLACEHOLDER_CELLS_9 = [
+  "c1",
+  "c2",
+  "c3",
+  "c4",
+  "c5",
+  "c6",
+  "c7",
+  "c8",
+  "c9",
+];
 const PLACEHOLDER_ROWS = ["r1", "r2", "r3", "r4", "r5"];
 
-function LoadingRows({ variant }: { variant: "7col" | "8col" }) {
-  const cells = variant === "7col" ? PLACEHOLDER_CELLS_7 : PLACEHOLDER_CELLS_8;
+function LoadingRows({ variant }: { variant: "7col" | "8col" | "9col" }) {
+  const cells =
+    variant === "7col"
+      ? PLACEHOLDER_CELLS_7
+      : variant === "8col"
+        ? PLACEHOLDER_CELLS_8
+        : PLACEHOLDER_CELLS_9;
   return (
     <>
       {PLACEHOLDER_ROWS.map((row) => (
@@ -280,7 +262,13 @@ function OverviewTab({
   loadingStats,
 }: {
   stats:
-    | { totalTasks: bigint; completedTasks: bigint; totalFees: bigint }
+    | {
+        totalTasks: bigint;
+        completedTasks: bigint;
+        totalFees: bigint;
+        totalUsers?: bigint;
+        activeTasks?: bigint;
+      }
     | null
     | undefined;
   tasks: Task[];
@@ -325,7 +313,11 @@ function OverviewTab({
             />
             <StatCard
               label="Total Users"
-              value={String(users.length)}
+              value={
+                stats?.totalUsers !== undefined
+                  ? String(stats.totalUsers)
+                  : String(users.length)
+              }
               icon={Users}
               color="bg-purple-400/15 text-purple-400"
             />
@@ -347,7 +339,9 @@ function OverviewTab({
             <p className="text-sm font-semibold">Active Tasks Now</p>
           </div>
           <p className="font-display font-black text-4xl text-green-vivid">
-            {activeTasks.length}
+            {stats?.activeTasks !== undefined
+              ? Number(stats.activeTasks)
+              : activeTasks.length}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             Accepted / In Progress / Delivered
@@ -798,6 +792,7 @@ function AllTasksTab({
                 <TableHead className="text-xs">Posted By</TableHead>
                 <TableHead className="text-xs">Price</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">Tasker UPI</TableHead>
                 <TableHead className="text-xs whitespace-nowrap">
                   Created Date
                 </TableHead>
@@ -806,10 +801,10 @@ function AllTasksTab({
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <LoadingRows variant="8col" />
+                <LoadingRows variant="9col" />
               ) : paginated.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8}>
+                  <TableCell colSpan={9}>
                     <EmptyState
                       icon="📋"
                       title="No tasks found"
@@ -874,6 +869,55 @@ function AllTasksTab({
                       </TableCell>
                       <TableCell>
                         <TaskStatusBadge status={task.status} />
+                      </TableCell>
+                      <TableCell>
+                        {task.taskerId ? (
+                          (() => {
+                            const tasker = profileMap.get(
+                              task.taskerId.toString(),
+                            );
+                            if (tasker?.upiId) {
+                              return (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-mono text-foreground truncate max-w-[100px]">
+                                    {tasker.upiId}
+                                  </span>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 text-muted-foreground hover:text-green-vivid"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(
+                                        tasker.upiId!,
+                                      );
+                                      toast.success("UPI copied!");
+                                    }}
+                                    title="Copy UPI ID"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              );
+                            }
+                            if (tasker) {
+                              return (
+                                <span className="text-xs text-yellow-400 flex items-center gap-1">
+                                  <AlertCircle className="w-3 h-3" />
+                                  No UPI
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="text-xs text-muted-foreground">
+                                —
+                              </span>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            —
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                         {formatTimestamp(task.createdAt)}
@@ -1292,10 +1336,33 @@ function TaskerProfileDialog({
               )}
             </div>
             <div className="bg-secondary/40 rounded-xl p-3">
-              <p className="text-xs text-muted-foreground mb-1">
-                Location / UPI
-              </p>
+              <p className="text-xs text-muted-foreground mb-1">Location</p>
               <p className="text-sm">{user.location || "—"}</p>
+            </div>
+            <div className="bg-secondary/40 rounded-xl p-3">
+              <p className="text-xs text-muted-foreground mb-1">UPI ID</p>
+              {user.upiId ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-mono">{user.upiId}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-green-vivid"
+                    onClick={() => {
+                      navigator.clipboard.writeText(user.upiId!);
+                      toast.success("UPI copied!");
+                    }}
+                    title="Copy UPI ID"
+                  >
+                    <Copy className="w-3 h-3" />
+                  </Button>
+                </div>
+              ) : (
+                <span className="text-xs text-yellow-400 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  No UPI – cannot payout
+                </span>
+              )}
             </div>
             <div className="bg-secondary/40 rounded-xl p-3">
               <p className="text-xs text-muted-foreground mb-1">
@@ -1451,7 +1518,8 @@ function TaskersTab({
               <TableRow className="bg-secondary/40 hover:bg-secondary/40">
                 <TableHead className="text-xs">Name</TableHead>
                 <TableHead className="text-xs">Phone</TableHead>
-                <TableHead className="text-xs">Location / UPI</TableHead>
+                <TableHead className="text-xs">Location</TableHead>
+                <TableHead className="text-xs">UPI ID</TableHead>
                 <TableHead className="text-xs">Completed</TableHead>
                 <TableHead className="text-xs">Active</TableHead>
                 <TableHead className="text-xs">Total Earnings</TableHead>
@@ -1461,10 +1529,10 @@ function TaskersTab({
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <LoadingRows variant="8col" />
+                <LoadingRows variant="9col" />
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8}>
+                  <TableCell colSpan={9}>
                     <EmptyState
                       icon="🧑‍💼"
                       title="No taskers yet"
@@ -1516,6 +1584,32 @@ function TaskersTab({
                             {user.location || "—"}
                           </span>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {user.upiId ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-mono text-foreground truncate max-w-[120px]">
+                              {user.upiId}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-green-vivid"
+                              onClick={() => {
+                                navigator.clipboard.writeText(user.upiId!);
+                                toast.success("UPI copied!");
+                              }}
+                              title="Copy UPI ID"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-yellow-400 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            No UPI
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <span className="text-sm font-bold text-green-vivid">
@@ -1586,48 +1680,48 @@ function TaskersTab({
 
 // ─── Tab: Payments ───────────────────────────────────────────────────────────
 
+function getPaymentStatusInfo(status: { __kind__: string }): {
+  label: string;
+  cls: string;
+} {
+  if (status.__kind__ === "success")
+    return {
+      label: "Success",
+      cls: "bg-green-surface text-green-vivid border-green-vivid/30",
+    };
+  if (status.__kind__ === "failed")
+    return {
+      label: "Failed",
+      cls: "bg-red-500/15 text-red-400 border-red-400/30",
+    };
+  return {
+    label: "Pending",
+    cls: "bg-yellow-500/15 text-yellow-400 border-yellow-400/30",
+  };
+}
+
 function PaymentsTab({
-  tasks,
-  users,
-  isLoading,
+  users: _users,
 }: {
   tasks: Task[];
   users: PublicUserProfile[];
   isLoading: boolean;
 }) {
+  const { data: paymentLogs = [], isLoading } = useAdminPaymentLogs();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const paymentRows = useMemo(() => {
-    return tasks
-      .filter((t) => t.status !== TaskStatus.posted)
-      .map((t) => {
-        const userPaid = t.amount;
-        const platformFee = BigInt(Math.round(Number(t.amount) * 0.05));
-        const taskerEarnings = t.amount - platformFee;
-        const payStatus = getPaymentStatus(t.status);
-        return { task: t, userPaid, platformFee, taskerEarnings, payStatus };
-      })
-      .sort((a, b) => Number(b.task.createdAt) - Number(a.task.createdAt));
-  }, [tasks]);
-
   const filtered = useMemo(() => {
-    let list = paymentRows;
+    let list = [...paymentLogs].sort((a, b) => Number(b.date) - Number(a.date));
     if (statusFilter !== "all") {
-      list = list.filter(
-        (r) => r.payStatus.label.toLowerCase() === statusFilter,
-      );
+      list = list.filter((r) => r.status.__kind__ === statusFilter);
     }
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter(
-        (r) =>
-          String(r.task.id).includes(q) ||
-          r.task.title.toLowerCase().includes(q),
-      );
+      list = list.filter((r) => String(r.taskId).includes(q));
     }
     return list;
-  }, [paymentRows, statusFilter, search]);
+  }, [paymentLogs, statusFilter, search]);
 
   return (
     <div className="space-y-4">
@@ -1635,7 +1729,7 @@ function PaymentsTab({
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by task ID or title..."
+            placeholder="Search by task ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-secondary/50 border-border"
@@ -1666,8 +1760,8 @@ function PaymentsTab({
           <Table className="min-w-[850px]">
             <TableHeader>
               <TableRow className="bg-secondary/40 hover:bg-secondary/40">
+                <TableHead className="text-xs">Payment ID</TableHead>
                 <TableHead className="text-xs">Task ID</TableHead>
-                <TableHead className="text-xs">Task Title</TableHead>
                 <TableHead className="text-xs">User Paid</TableHead>
                 <TableHead className="text-xs">Tasker Earnings</TableHead>
                 <TableHead className="text-xs">Platform Fee</TableHead>
@@ -1684,53 +1778,51 @@ function PaymentsTab({
                     <EmptyState
                       icon="💳"
                       title="No payment data"
-                      description="Payment logs will appear here as tasks progress through acceptance and OTP verification."
+                      description="Payment logs will appear here as tasks get paid and processed."
                       ocid="admin.payments.empty_state"
                     />
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((row, i) => (
-                  <motion.tr
-                    key={String(row.task.id)}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: i * 0.015 }}
-                    className="border-b border-border hover:bg-secondary/20 transition-colors"
-                    data-ocid={`admin.payments.row.${i + 1}`}
-                  >
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      #{String(row.task.id)}
-                    </TableCell>
-                    <TableCell>
-                      <p className="font-medium text-sm truncate max-w-[150px]">
-                        {row.task.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {getUserName(row.task.customerId.toString(), users)}
-                      </p>
-                    </TableCell>
-                    <TableCell className="font-bold text-sm text-green-vivid">
-                      {formatINR(row.userPaid)}
-                    </TableCell>
-                    <TableCell className="font-bold text-sm text-blue-400">
-                      {formatINR(row.taskerEarnings)}
-                    </TableCell>
-                    <TableCell className="font-bold text-sm text-yellow-400">
-                      {formatINR(row.platformFee)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={`${row.payStatus.cls} text-xs border px-2 py-0.5 font-semibold`}
-                      >
-                        {row.payStatus.label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {formatTimestamp(row.task.createdAt)}
-                    </TableCell>
-                  </motion.tr>
-                ))
+                filtered.map((row: PaymentLog, i: number) => {
+                  const payStatus = getPaymentStatusInfo(row.status);
+                  return (
+                    <motion.tr
+                      key={String(row.id)}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.015 }}
+                      className="border-b border-border hover:bg-secondary/20 transition-colors"
+                      data-ocid={`admin.payments.row.${i + 1}`}
+                    >
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        #{String(row.id)}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        #{String(row.taskId)}
+                      </TableCell>
+                      <TableCell className="font-bold text-sm text-green-vivid">
+                        {formatINR(row.userPaid)}
+                      </TableCell>
+                      <TableCell className="font-bold text-sm text-blue-400">
+                        {formatINR(row.taskerEarnings)}
+                      </TableCell>
+                      <TableCell className="font-bold text-sm text-yellow-400">
+                        {formatINR(row.platformFee)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={`${payStatus.cls} text-xs border px-2 py-0.5 font-semibold`}
+                        >
+                          {payStatus.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {formatTimestamp(row.date)}
+                      </TableCell>
+                    </motion.tr>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -1743,95 +1835,28 @@ function PaymentsTab({
 // ─── Tab: Payouts (Manual) ───────────────────────────────────────────────────
 
 function PayoutsTab({
-  tasks,
   users,
-  isLoading,
 }: {
   tasks: Task[];
   users: PublicUserProfile[];
   isLoading: boolean;
 }) {
-  const [payouts, setPayouts] = useState<PayoutEntry[]>(() => loadPayouts());
-  const [markPaidTarget, setMarkPaidTarget] = useState<string | null>(null);
+  const { data: payouts = [], isLoading } = useAdminPayoutRecords();
+  const markPaid = useAdminMarkPayoutPaid();
+  const [markPaidTarget, setMarkPaidTarget] = useState<bigint | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<"upi" | "cash">("upi");
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [newTaskId, setNewTaskId] = useState("");
-  const [newMethod, setNewMethod] = useState<"upi" | "cash">("upi");
-
-  // Auto-generate payout entries for completed tasks
-  useEffect(() => {
-    if (tasks.length === 0) return;
-    const completedWithTasker = tasks.filter(
-      (t) => t.status === TaskStatus.completed && t.taskerId != null,
-    );
-    setPayouts((prev) => {
-      const existingIds = new Set(prev.map((p) => p.taskId));
-      const newEntries: PayoutEntry[] = completedWithTasker
-        .filter((t) => !existingIds.has(String(t.id)))
-        .map((t) => ({
-          id: `payout_${String(t.id)}`,
-          taskId: String(t.id),
-          taskerName: getUserName(t.taskerId!.toString(), users),
-          amount: BigInt(Math.round(Number(t.amount) * 0.95)),
-          status: "pending" as const,
-          method: null,
-          createdDate: Number(t.completedAt ?? t.createdAt) / 1_000_000,
-          paidDate: null,
-        }));
-      if (newEntries.length === 0) return prev;
-      const updated = [...prev, ...newEntries];
-      savePayouts(updated);
-      return updated;
-    });
-  }, [tasks, users]);
 
   const pendingTotal = payouts
-    .filter((p) => p.status === "pending")
-    .reduce((sum, p) => sum + p.amount, 0n);
+    .filter((p: PayoutRecord) => p.status.__kind__ === "pending")
+    .reduce((sum: bigint, p: PayoutRecord) => sum + p.amount, 0n);
   const paidTotal = payouts
-    .filter((p) => p.status === "paid")
-    .reduce((sum, p) => sum + p.amount, 0n);
+    .filter((p: PayoutRecord) => p.status.__kind__ === "paid")
+    .reduce((sum: bigint, p: PayoutRecord) => sum + p.amount, 0n);
 
-  const handleMarkPaid = (id: string) => {
-    setPayouts((prev) => {
-      const updated = prev.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              status: "paid" as const,
-              method: selectedMethod,
-              paidDate: Date.now(),
-            }
-          : p,
-      );
-      savePayouts(updated);
-      return updated;
-    });
+  const handleMarkPaid = (taskId: bigint) => {
+    const method: PayoutMethod = { __kind__: selectedMethod };
+    markPaid.mutate({ taskId, method });
     setMarkPaidTarget(null);
-  };
-
-  const handleAddManual = () => {
-    const task = tasks.find((t) => String(t.id) === newTaskId.trim());
-    if (!task) return;
-    const entry: PayoutEntry = {
-      id: `payout_manual_${Date.now()}`,
-      taskId: newTaskId.trim(),
-      taskerName: task.taskerId
-        ? getUserName(task.taskerId.toString(), users)
-        : "Unknown",
-      amount: BigInt(Math.round(Number(task.amount) * 0.95)),
-      status: "pending",
-      method: null,
-      createdDate: Date.now(),
-      paidDate: null,
-    };
-    setPayouts((prev) => {
-      const updated = [...prev, entry];
-      savePayouts(updated);
-      return updated;
-    });
-    setNewTaskId("");
-    setAddDialogOpen(false);
   };
 
   return (
@@ -1862,15 +1887,6 @@ function PayoutsTab({
         <p className="text-xs text-muted-foreground">
           {payouts.length} payout records
         </p>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setAddDialogOpen(true)}
-          data-ocid="admin.payouts.open_modal_button"
-          className="h-8 text-xs border-green-vivid/30 text-green-vivid hover:bg-green-surface"
-        >
-          + Add Manual Payout
-        </Button>
       </div>
 
       <div
@@ -1878,37 +1894,36 @@ function PayoutsTab({
         data-ocid="admin.payouts.table"
       >
         <div className="overflow-x-auto">
-          <Table className="min-w-[850px]">
+          <Table className="min-w-[750px]">
             <TableHeader>
               <TableRow className="bg-secondary/40 hover:bg-secondary/40">
                 <TableHead className="text-xs">Task ID</TableHead>
-                <TableHead className="text-xs">Tasker Name</TableHead>
-                <TableHead className="text-xs">Amount to Pay</TableHead>
+                <TableHead className="text-xs">Tasker</TableHead>
+                <TableHead className="text-xs">Amount</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
                 <TableHead className="text-xs">Method</TableHead>
-                <TableHead className="text-xs">Created Date</TableHead>
-                <TableHead className="text-xs">Paid Date</TableHead>
+                <TableHead className="text-xs">Created</TableHead>
                 <TableHead className="text-xs">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <LoadingRows variant="8col" />
+                <LoadingRows variant="7col" />
               ) : payouts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8}>
+                  <TableCell colSpan={7}>
                     <EmptyState
                       icon="💸"
                       title="No payout records"
-                      description="Payout records appear here after tasks are completed. You can also add manual entries."
+                      description="Payout records appear here when tasks are completed and tasker payments are pending."
                       ocid="admin.payouts.empty_state"
                     />
                   </TableCell>
                 </TableRow>
               ) : (
-                payouts.map((payout, i) => (
+                payouts.map((payout: PayoutRecord, i: number) => (
                   <motion.tr
-                    key={payout.id}
+                    key={String(payout.taskId)}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.015 }}
@@ -1916,67 +1931,71 @@ function PayoutsTab({
                     data-ocid={`admin.payouts.row.${i + 1}`}
                   >
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      #{payout.taskId}
+                      #{String(payout.taskId)}
                     </TableCell>
-                    <TableCell className="font-medium text-sm">
-                      {payout.taskerName}
+                    <TableCell>
+                      <p className="font-medium text-sm">
+                        {getUserName(payout.taskerId.toString(), users)}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {truncatePrincipal(payout.taskerId.toString())}
+                      </p>
+                      {(() => {
+                        const t = users.find(
+                          (u) => u.id.toString() === payout.taskerId.toString(),
+                        );
+                        return t?.upiId ? (
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className="text-xs font-mono text-green-vivid truncate max-w-[120px]">
+                              {t.upiId}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 w-5 p-0 text-muted-foreground hover:text-green-vivid"
+                              onClick={() => {
+                                navigator.clipboard.writeText(t.upiId!);
+                                toast.success("UPI copied!");
+                              }}
+                              title="Copy UPI ID"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-yellow-400 flex items-center gap-1 mt-1">
+                            <AlertCircle className="w-3 h-3" />
+                            No UPI
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="font-bold text-sm text-green-vivid">
                       {formatINR(payout.amount)}
                     </TableCell>
                     <TableCell>
-                      {payout.status === "paid" ? (
-                        <Badge className="bg-green-surface text-green-vivid border-green-vivid/30 text-xs border font-semibold">
-                          Paid
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-orange-400/15 text-orange-400 border-orange-400/30 text-xs border font-semibold">
-                          Pending
-                        </Badge>
-                      )}
+                      <Badge
+                        className={
+                          payout.status.__kind__ === "paid"
+                            ? "bg-green-surface text-green-vivid border-green-vivid/30 text-xs border px-2 py-0.5"
+                            : "bg-orange-500/15 text-orange-400 border-orange-400/30 text-xs border px-2 py-0.5"
+                        }
+                      >
+                        {payout.status.__kind__ === "paid" ? "Paid" : "Pending"}
+                      </Badge>
                     </TableCell>
-                    <TableCell className="text-sm">
-                      {payout.method ? (
-                        <div className="flex items-center gap-1.5">
-                          {payout.method === "upi" ? (
-                            <CreditCard className="w-3 h-3 text-blue-400" />
-                          ) : (
-                            <BanknoteIcon className="w-3 h-3 text-yellow-400" />
-                          )}
-                          <span className="capitalize text-xs">
-                            {payout.method}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(payout.createdDate).toLocaleDateString(
-                        "en-IN",
-                        {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        },
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {payout.paidDate
-                        ? new Date(payout.paidDate).toLocaleDateString(
-                            "en-IN",
-                            {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            },
-                          )
+                    <TableCell className="text-xs text-muted-foreground">
+                      {payout.method
+                        ? payout.method.__kind__.toUpperCase()
                         : "—"}
                     </TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      {formatTimestamp(payout.createdDate)}
+                    </TableCell>
                     <TableCell>
-                      {payout.status === "pending" ? (
-                        markPaidTarget === payout.id ? (
-                          <div className="flex items-center gap-1.5">
+                      {payout.status.__kind__ === "pending" ? (
+                        markPaidTarget === payout.taskId ? (
+                          <div className="flex items-center gap-2">
                             <Select
                               value={selectedMethod}
                               onValueChange={(v) =>
@@ -1996,19 +2015,19 @@ function PayoutsTab({
                             </Select>
                             <Button
                               size="sm"
-                              onClick={() => handleMarkPaid(payout.id)}
+                              className="h-7 text-xs bg-green-vivid hover:bg-green-vivid/90 text-white px-2"
+                              onClick={() => handleMarkPaid(payout.taskId)}
+                              disabled={markPaid.isPending}
                               data-ocid={`admin.payouts.confirm_button.${i + 1}`}
-                              className="h-7 px-2.5 text-xs bg-green-vivid hover:bg-green-ultra text-background"
                             >
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
                               Confirm
                             </Button>
                             <Button
                               size="sm"
                               variant="ghost"
+                              className="h-7 text-xs text-muted-foreground px-2"
                               onClick={() => setMarkPaidTarget(null)}
                               data-ocid="admin.payouts.cancel_button"
-                              className="h-7 w-7 p-0"
                             >
                               <X className="w-3 h-3" />
                             </Button>
@@ -2017,16 +2036,18 @@ function PayoutsTab({
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => setMarkPaidTarget(payout.id)}
+                            className="h-7 text-xs border-green-vivid/30 text-green-vivid hover:bg-green-surface px-2"
+                            onClick={() => setMarkPaidTarget(payout.taskId)}
                             data-ocid={`admin.payouts.primary_button.${i + 1}`}
-                            className="h-7 px-2.5 text-xs border-green-vivid/30 text-green-vivid hover:bg-green-surface"
                           >
-                            Mark as Paid
+                            Mark Paid
                           </Button>
                         )
                       ) : (
                         <span className="text-xs text-muted-foreground">
-                          Done
+                          {payout.paidDate
+                            ? formatTimestamp(payout.paidDate)
+                            : "—"}
                         </span>
                       )}
                     </TableCell>
@@ -2037,75 +2058,12 @@ function PayoutsTab({
           </Table>
         </div>
       </div>
-
-      {/* Add manual payout dialog */}
-      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent
-          className="max-w-sm bg-surface-2 border-border"
-          data-ocid="admin.payouts.dialog"
-        >
-          <DialogHeader>
-            <DialogTitle>Add Manual Payout</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Task ID</p>
-              <Input
-                placeholder="Enter task ID"
-                value={newTaskId}
-                onChange={(e) => setNewTaskId(e.target.value)}
-                className="bg-secondary/50 border-border"
-                data-ocid="admin.payouts.input"
-              />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">
-                Payout Method
-              </p>
-              <Select
-                value={newMethod}
-                onValueChange={(v) => setNewMethod(v as "upi" | "cash")}
-              >
-                <SelectTrigger
-                  className="bg-secondary/50 border-border"
-                  data-ocid="admin.payouts.select"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-surface-2 border-border">
-                  <SelectItem value="upi">UPI</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setAddDialogOpen(false)}
-              data-ocid="admin.payouts.cancel_button"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAddManual}
-              disabled={!newTaskId.trim()}
-              data-ocid="admin.payouts.submit_button"
-              className="bg-green-vivid hover:bg-green-ultra text-background"
-            >
-              Add Payout
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
 
-// ─── Main component ──────────────────────────────────────────────────────────
-
-const TABS: Array<{ id: AdminTab; label: string; icon: React.ElementType }> = [
-  { id: "overview", label: "Overview", icon: ShieldCheck },
+const TABS: { id: AdminTab; label: string; icon: React.ElementType }[] = [
+  { id: "overview", label: "Overview", icon: ClipboardList },
   { id: "tasks", label: "All Tasks", icon: ClipboardList },
   { id: "users", label: "Users", icon: Users },
   { id: "taskers", label: "Taskers", icon: UserCheck },
@@ -2124,20 +2082,48 @@ export default function AdminDashboard() {
   const {
     data: tasks = [],
     isLoading: loadingTasks,
+    isError: tasksError,
     refetch: refetchTasks,
   } = useAdminAllTasks();
   const {
     data: users = [],
     isLoading: loadingUsers,
+    isError: usersError,
     refetch: refetchUsers,
   } = useAdminAllUsers();
+  const { refetch: refetchPayments } = useAdminPaymentLogs();
+  const { refetch: refetchPayouts } = useAdminPayoutRecords();
 
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Auto-refresh every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refetchTasks();
+      refetchUsers();
+      refetchStats();
+      refetchPayments();
+      refetchPayouts();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [
+    refetchTasks,
+    refetchUsers,
+    refetchStats,
+    refetchPayments,
+    refetchPayouts,
+  ]);
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await Promise.all([refetchTasks(), refetchUsers(), refetchStats()]);
+    await Promise.all([
+      refetchTasks(),
+      refetchUsers(),
+      refetchStats(),
+      refetchPayments(),
+      refetchPayouts(),
+    ]);
     setIsRefreshing(false);
   };
 
@@ -2145,7 +2131,6 @@ export default function AdminDashboard() {
     tasks: tasks.length,
     users: users.length,
     taskers: users.filter((u) => u.isAvailableAsTasker).length,
-    payments: tasks.filter((t) => t.status !== TaskStatus.posted).length,
   };
 
   if (checkingAdmin) {
@@ -2164,7 +2149,7 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!isAdmin && !isAdminMode) {
+  if (!isAdminMode && isAdmin === false) {
     return (
       <div
         className="max-w-md mx-auto px-4 py-20 text-center"
@@ -2208,20 +2193,37 @@ export default function AdminDashboard() {
             Full operational control — tasks, users, payments &amp; payouts
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          data-ocid="admin.secondary_button"
-          className="text-muted-foreground hover:text-green-vivid gap-2 flex-shrink-0"
-        >
-          <RefreshCw
-            className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
-          />
-          <span className="hidden sm:inline">Refresh</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-surface border border-green-vivid/30">
+            <span className="w-2 h-2 rounded-full bg-green-vivid animate-pulse" />
+            <span className="text-xs font-semibold text-green-vivid">Live</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            data-ocid="admin.secondary_button"
+            className="text-muted-foreground hover:text-green-vivid gap-2 flex-shrink-0"
+          >
+            <RefreshCw
+              className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
+        </div>
       </motion.div>
+
+      {/* Error banners */}
+      {(tasksError || usersError) && (
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/15 border border-red-400/30 text-red-400 text-sm"
+          data-ocid="admin.error_state"
+        >
+          <span className="text-base">⚠️</span>
+          <span>Failed to load data from backend. Please refresh.</span>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-border overflow-x-auto">

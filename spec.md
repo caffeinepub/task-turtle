@@ -1,43 +1,39 @@
-# Task Turtle – Admin Control Dashboard Overhaul
+# Task Turtle
 
 ## Current State
-- Admin dashboard exists (`AdminDashboard.tsx`, 1114 lines) with 4 tabs: Overview, All Tasks, Taskers, All Users
-- Backend has: `getAllTasks()`, `getAllUserProfiles()`, `getPlatformStats()`, `cancelTask()` (user-only, not admin)
-- No payment tracking table, no payout management system
-- cancelTask() only allows task owner to cancel, not admin
-- No payment logs stored in backend
-- No payout records or manual payout tracking
+Task Turtle is a fully functional hyper-local task marketplace. Users post real-world tasks and taskers complete them for payment. The admin dashboard has 6 tabs (Overview, All Tasks, Users, Taskers, Payments, Manual Payouts) showing live backend data. The `PublicUserProfile` model currently has: id, name, phone, location, rating, walletBalance, isAvailableAsTasker. The `updateProfile` backend function accepts (name, phone, location, isAvailableAsTasker). There is no UPI ID field anywhere in the system.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Backend: `adminCancelTask(taskId)` – admin can cancel any task regardless of status/owner
-- Backend: `PaymentLog` type + `paymentLogs` stable map to record every payment event
-- Backend: `addPaymentLog(taskId, userPaid, taskerEarnings, platformFee, status)` for internal recording
-- Backend: `getPaymentLogs()` – admin query to fetch all payment records
-- Backend: `PayoutRecord` type + `payoutRecords` stable map
-- Backend: `getPendingPayouts()` – admin query returns all payout records
-- Backend: `markPayoutPaid(taskId, method, date)` – admin marks a payout as Paid
-- Frontend: Full rewrite of AdminDashboard with 6 tabs: Overview, Tasks, Users, Taskers, Payments, Payouts
-- Frontend: Tasks table with Task ID, Title, Description, Posted By, Price, Status, Created Date; clickable rows; Cancel with confirmation dialog
-- Frontend: Users table with Name, Phone, Email, Tasks Posted, Amount Spent, Wallet Balance; click → profile modal with task + payment history
-- Frontend: Taskers table with Name, Phone, Completed Tasks, Active Tasks, Total Earnings, Pending Payout; click → profile modal
-- Frontend: Payments table with Task ID, User Paid, Tasker Earnings, Platform Fee, Status, Date
-- Frontend: Payouts table with Task ID, Tasker Name, Amount, Status (Pending/Paid), Method (UPI/Cash), Date; Mark as Paid action
-- Frontend: Search + filter (by status, date range) on all tables
-- Frontend: Pagination (20 rows per page) on all tables
-- Frontend: Dark theme consistent with existing green+black design
+- `upiId: ?Text` field to `PublicUserProfile` Motoko type
+- `upiId: ?Text` parameter to `updateProfile` backend function
+- UPI ID input field on ProfilePage (required when tasker mode is ON, with `@` validation)
+- UPI ID column in Admin Taskers tab with Copy button
+- Tasker UPI ID column in Admin All Tasks tab with Copy button and "No UPI" warning badge
+- `upiId?: string` to frontend `PublicUserProfile` type declarations
+- `upiId` parameter to `useUpdateProfile` hook mutation
 
 ### Modify
-- `cancelTask()` backend: add admin bypass path OR create separate `adminCancelTask()`
-- AdminDashboard.tsx: full replacement with new 6-tab structure
+- `updateProfile` Motoko function: accept and store `upiId`
+- `rateTask` Motoko function: preserve `upiId` when rebuilding profile objects
+- `saveCallerUserProfile` references: include `upiId`
+- `useEnsureProfile` and `useProfile` fallback calls to `actor.updateProfile` to pass `null` as 5th arg
+- ProfilePage: sync `upiId` from profile, include in save
+- AdminDashboard Taskers tab: replace "Location / UPI" with separate Location + UPI ID columns
+- AdminDashboard All Tasks tab: add Tasker UPI column
+- AdminDashboard TaskerProfileDialog: show dedicated UPI ID field
 
 ### Remove
-- Old summary-only overview in admin (replace with richer stats cards + tables)
+- Nothing removed
 
 ## Implementation Plan
-1. Update `main.mo`: add PaymentLog type, PayoutRecord type, adminCancelTask, getPaymentLogs, getPendingPayouts, markPayoutPaid; auto-create payout record when task completed
-2. Regenerate backend bindings (backend.d.ts)
-3. Rewrite AdminDashboard.tsx with 6 fully functional tabs, tables, search, filter, pagination, modals
-4. Wire all backend calls using actor methods from declarations
-5. Validate (lint, typecheck, build)
+1. Update `PublicUserProfile` type in main.mo to add `upiId: ?Text`
+2. Update `updateProfile` in main.mo to accept and store `upiId`
+3. Update `rateTask` in main.mo to preserve `upiId` in both profile update blocks
+4. Update frontend type declarations (backend.d.ts, backend.did.d.ts) with `upiId`
+5. Update `useUpdateProfile` hook to include `upiId` parameter
+6. Update fallback `actor.updateProfile` calls in useEnsureProfile/useProfile to pass null 5th arg
+7. Add UPI ID field to ProfilePage with validation (required for taskers)
+8. Add UPI ID column + copy button to AdminDashboard Taskers tab
+9. Add Tasker UPI column + copy button + warning badge to AdminDashboard All Tasks tab

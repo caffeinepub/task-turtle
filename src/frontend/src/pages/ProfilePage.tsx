@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
+  AlertCircle,
   Loader2,
   MapPin,
   Phone,
@@ -36,6 +37,8 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
   const [isAvailable, setIsAvailable] = useState(false);
+  const [upiId, setUpiId] = useState("");
+  const [upiError, setUpiError] = useState("");
 
   // Sync form when profile loads
   useEffect(() => {
@@ -44,23 +47,41 @@ export default function ProfilePage() {
       setPhone(profile.phone ?? "");
       setLocation(profile.location ?? "");
       setIsAvailable(profile.isAvailableAsTasker ?? false);
+      setUpiId(profile.upiId ?? "");
     }
   }, [profile]);
 
+  const validateUpi = (val: string) => {
+    if (!val && isAvailable) return "UPI ID is required for tasker mode";
+    if (val && !val.includes("@")) return "UPI ID must contain @";
+    return "";
+  };
+
+  const handleUpiChange = (val: string) => {
+    setUpiId(val);
+    setUpiError(validateUpi(val));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const err = validateUpi(upiId);
+    if (err) {
+      setUpiError(err);
+      return;
+    }
     await updateProfile.mutateAsync({
       name,
       phone: phone || null,
       location,
       isAvailableAsTasker: isAvailable,
+      upiId: upiId || null,
     });
   };
 
   const principal = identity?.getPrincipal().toString() ?? "";
   const shortPrincipal =
     principal.length > 20
-      ? `${principal.slice(0, 10)}…${principal.slice(-6)}`
+      ? `${principal.slice(0, 10)}\u2026${principal.slice(-6)}`
       : principal;
 
   const initials = name
@@ -71,6 +92,9 @@ export default function ProfilePage() {
         .toUpperCase()
         .slice(0, 2)
     : "TT";
+
+  const isFormValid =
+    !!name && !!location && (!isAvailable || (!!upiId && upiId.includes("@")));
 
   return (
     <div className="max-w-xl mx-auto px-4 sm:px-6 py-8 space-y-8">
@@ -210,6 +234,44 @@ export default function ProfilePage() {
                 />
               </div>
 
+              {/* UPI ID */}
+              <div className="space-y-2">
+                <Label htmlFor="profile-upi" className="text-sm font-semibold">
+                  <Wallet className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
+                  UPI ID
+                  {isAvailable ? (
+                    <span className="text-red-400 font-normal ml-1">
+                      * required for taskers
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground font-normal ml-1">
+                      — optional
+                    </span>
+                  )}
+                </Label>
+                <Input
+                  id="profile-upi"
+                  data-ocid="profile.upi_input"
+                  placeholder="example@upi"
+                  value={upiId}
+                  onChange={(e) => handleUpiChange(e.target.value)}
+                  className={`bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12 ${
+                    upiError ? "border-red-500/60" : ""
+                  }`}
+                />
+                {upiError && (
+                  <p className="text-xs text-red-400 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {upiError}
+                  </p>
+                )}
+                {upiId?.includes("@") && !upiError && (
+                  <p className="text-xs text-green-vivid">
+                    \u2713 UPI ID looks good
+                  </p>
+                )}
+              </div>
+
               {/* Tasker availability */}
               <div className="bg-secondary/50 rounded-2xl p-4 border border-border">
                 <div className="flex items-center justify-between">
@@ -232,24 +294,43 @@ export default function ProfilePage() {
                   </div>
                   <Switch
                     checked={isAvailable}
-                    onCheckedChange={setIsAvailable}
+                    onCheckedChange={(val) => {
+                      setIsAvailable(val);
+                      if (val && upiId && !upiId.includes("@")) {
+                        setUpiError("UPI ID must contain @");
+                      } else if (val && !upiId) {
+                        setUpiError("UPI ID is required for tasker mode");
+                      } else {
+                        setUpiError("");
+                      }
+                    }}
                     data-ocid="profile.availability_switch"
                     className="data-[state=checked]:bg-primary"
                   />
                 </div>
               </div>
 
+              {isAvailable && !upiId && (
+                <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3">
+                  <AlertCircle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-yellow-300">
+                    Add your UPI ID so admin can send you payment after task
+                    completion.
+                  </p>
+                </div>
+              )}
+
               <Button
                 type="submit"
                 size="lg"
                 data-ocid="profile.save_button"
-                disabled={updateProfile.isPending || !name || !location}
+                disabled={updateProfile.isPending || !isFormValid}
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold py-6 shadow-green-sm hover:shadow-green-md transition-all rounded-2xl"
               >
                 {updateProfile.isPending ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Saving…
+                    Saving\u2026
                   </>
                 ) : (
                   <>
@@ -282,7 +363,7 @@ export default function ProfilePage() {
 
       {/* Footer */}
       <p className="text-center text-xs text-muted-foreground pb-4">
-        © {new Date().getFullYear()} Task Turtle. All rights reserved.
+        \u00a9 {new Date().getFullYear()} Task Turtle. All rights reserved.
       </p>
     </div>
   );

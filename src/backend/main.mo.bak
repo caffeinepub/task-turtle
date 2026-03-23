@@ -44,6 +44,12 @@ actor {
     storeLocation : Text;
   };
 
+  module PublicUserProfile {
+    public func compare(profile1 : PublicUserProfile, profile2 : PublicUserProfile) : Order.Order {
+      Int.compare(profile1.walletBalance, profile2.walletBalance);
+    };
+  };
+
   public type TaskStatus = {
     #posted;
     #accepted;
@@ -53,19 +59,6 @@ actor {
     #cancelled;
   };
 
-  // Internal stored type — matches the original stable layout (NO upiId).
-  // Must NOT change to preserve stable memory compatibility.
-  type StoredProfile = {
-    id : Principal;
-    name : Text;
-    phone : ?Text;
-    location : Text;
-    rating : Nat;
-    walletBalance : Nat;
-    isAvailableAsTasker : Bool;
-  };
-
-  // Public API type — includes upiId sourced from the separate upiIds map.
   public type PublicUserProfile = {
     id : Principal;
     name : Text;
@@ -74,13 +67,6 @@ actor {
     rating : Nat;
     walletBalance : Nat;
     isAvailableAsTasker : Bool;
-    upiId : ?Text;
-  };
-
-  module PublicUserProfile {
-    public func compare(p1 : PublicUserProfile, p2 : PublicUserProfile) : Order.Order {
-      Int.compare(p1.walletBalance, p2.walletBalance);
-    };
   };
 
   public type Task = {
@@ -132,10 +118,7 @@ actor {
   include MixinAuthorization(accessControlState);
 
   let tasks = Map.empty<Nat, Task>();
-  // profiles uses StoredProfile (original layout) — stable-memory safe.
-  let profiles = Map.empty<Principal, StoredProfile>();
-  // upiIds is a new map — no migration needed.
-  let upiIds = Map.empty<Principal, Text>();
+  let profiles = Map.empty<Principal, PublicUserProfile>();
   let ratingCounts = Map.empty<Principal, Nat>();
   let paymentLogs = Map.empty<Nat, PaymentLog>();
   let payoutRecords = Map.empty<Nat, PayoutRecord>();
@@ -144,18 +127,6 @@ actor {
   var nextLogId = 1;
   var platformFees = 0;
   var stripeConfig : ?Stripe.StripeConfiguration = null;
-
-  // Helper: combine StoredProfile + upiId lookup into the public type.
-  func toPublicProfile(p : StoredProfile) : PublicUserProfile = {
-    id = p.id;
-    name = p.name;
-    phone = p.phone;
-    location = p.location;
-    rating = p.rating;
-    walletBalance = p.walletBalance;
-    isAvailableAsTasker = p.isAvailableAsTasker;
-    upiId = upiIds.get(p.id);
-  };
 
   func isUser(caller : Principal) : Bool {
     if (caller.isAnonymous()) { return false };
@@ -176,30 +147,14 @@ actor {
     if (not isUser(caller)) {
       Runtime.trap("Unauthorized: Only users can view profiles");
     };
-    switch (profiles.get(caller)) {
-      case (null) { null };
-      case (?p) { ?(toPublicProfile(p)) };
-    };
+    profiles.get(caller);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : PublicUserProfile) : async () {
     if (not isUser(caller)) {
       Runtime.trap("Unauthorized: Only users can save profiles");
     };
-    let stored : StoredProfile = {
-      id = profile.id;
-      name = profile.name;
-      phone = profile.phone;
-      location = profile.location;
-      rating = profile.rating;
-      walletBalance = profile.walletBalance;
-      isAvailableAsTasker = profile.isAvailableAsTasker;
-    };
-    profiles.add(caller, stored);
-    switch (profile.upiId) {
-      case (null) {};
-      case (?upi) { upiIds.add(caller, upi) };
-    };
+    profiles.add(caller, profile);
   };
 
   public query ({ caller }) func getTaskById(id : Nat) : async TaskResult {
@@ -232,11 +187,11 @@ actor {
     };
     switch (profiles.get(user)) {
       case (null) { Runtime.trap("User not found") };
-      case (?p) { toPublicProfile(p) };
+      case (?profile) { profile };
     };
   };
 
-  public shared ({ caller }) func updateProfile(name : Text, phone : ?Text, location : Text, isAvailableAsTasker : Bool, upiId : ?Text) : async () {
+  public shared ({ caller }) func updateProfile(name : Text, phone : ?Text, location : Text, isAvailableAsTasker : Bool) : async () {
     if (not isUser(caller)) {
       Runtime.trap("Unauthorized: Only users can update profiles");
     };
@@ -251,7 +206,7 @@ actor {
       case (?p) { p.rating };
     };
 
-    let stored : StoredProfile = {
+    let profile : PublicUserProfile = {
       id = caller;
       name;
       phone;
@@ -260,13 +215,7 @@ actor {
       walletBalance;
       isAvailableAsTasker;
     };
-    profiles.add(caller, stored);
-
-    // Store upiId separately
-    switch (upiId) {
-      case (null) {};
-      case (?upi) { upiIds.add(caller, upi) };
-    };
+    profiles.add(caller, profile);
   };
 
   public shared ({ caller }) func createTask(title : Text, description : Text, amount : Nat, tip : ?Nat, customerLocation : Text, storeLocation : Text) : async Nat {
@@ -497,10 +446,10 @@ actor {
     tasks.values().toArray();
   };
 
-  // Admin: get ALL user profiles (with upiId)
+  // Admin: get ALL user profiles
   public query ({ caller }) func getAllUserProfiles() : async [PublicUserProfile] {
     if (caller.isAnonymous()) { return [] };
-    profiles.values().toArray().map(toPublicProfile);
+    profiles.values().toArray();
   };
 
   // Admin: cancel any task regardless of status/owner
@@ -665,7 +614,7 @@ actor {
                     Int.abs(newTotal / (currentCount : Int));
                   } else { 0 };
                   let { id; walletBalance } = profile;
-                  let newProfile : StoredProfile = {
+                  let newProfile = {
                     id;
                     name = profile.name;
                     phone = profile.phone;
@@ -706,7 +655,7 @@ actor {
                       Int.abs(newTotal / (currentCount : Int));
                     } else { 0 };
                     let { id; walletBalance } = profile;
-                    let newProfile : StoredProfile = {
+                    let newProfile = {
                       id;
                       name = profile.name;
                       phone = profile.phone;

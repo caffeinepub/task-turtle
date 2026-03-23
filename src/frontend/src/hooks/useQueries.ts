@@ -1,7 +1,13 @@
 import type { Principal } from "@icp-sdk/core/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { PublicUserProfile, Task } from "../backend.d";
+import type {
+  PaymentLog,
+  PayoutMethod,
+  PayoutRecord,
+  PublicUserProfile,
+  Task,
+} from "../backend.d";
 import { UserRole } from "../backend.d";
 import { useActor } from "./useActor";
 import { useInternetIdentity } from "./useInternetIdentity";
@@ -31,7 +37,7 @@ export function useEnsureProfile() {
         try {
           const existing = await actor.getCallerUserProfile();
           if (!existing) {
-            await actor.updateProfile("New User", null, "", false);
+            await actor.updateProfile("New User", null, "", false, null);
           }
           return true;
         } catch (err) {
@@ -46,14 +52,14 @@ export function useEnsureProfile() {
               continue;
             }
             try {
-              await actor.updateProfile("New User", null, "", false);
+              await actor.updateProfile("New User", null, "", false, null);
               return true;
             } catch {
               return null;
             }
           }
           try {
-            await actor.updateProfile("New User", null, "", false);
+            await actor.updateProfile("New User", null, "", false, null);
             return true;
           } catch {
             return null;
@@ -86,7 +92,7 @@ export function useProfile() {
         const msg = String(err);
         if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
           try {
-            await actor.updateProfile("New User", null, "", false);
+            await actor.updateProfile("New User", null, "", false, null);
             return await actor.getCallerUserProfile();
           } catch {
             return null;
@@ -111,15 +117,23 @@ export function useUpdateProfile() {
       phone,
       location,
       isAvailableAsTasker,
+      upiId,
     }: {
       name: string;
       phone: string | null;
       location: string;
       isAvailableAsTasker: boolean;
+      upiId?: string | null;
     }) => {
       checkAuthenticated(identity);
       if (!actor) throw new Error("Not connected");
-      return actor.updateProfile(name, phone, location, isAvailableAsTasker);
+      return actor.updateProfile(
+        name,
+        phone,
+        location,
+        isAvailableAsTasker,
+        upiId ?? null,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile"] });
@@ -188,7 +202,7 @@ export function useMyPostedTasks(options?: { refetchInterval?: number }) {
         const msg = String(err);
         if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
           try {
-            await actor.updateProfile("New User", null, "", false);
+            await actor.updateProfile("New User", null, "", false, null);
             return await actor.getMyPostedTasks();
           } catch {
             return [];
@@ -234,11 +248,11 @@ export function useCreateTask() {
           try {
             const profile = await actor.getCallerUserProfile();
             if (!profile) {
-              await actor.updateProfile("New User", null, "", false);
+              await actor.updateProfile("New User", null, "", false, null);
             }
           } catch {
             try {
-              await actor.updateProfile("New User", null, "", false);
+              await actor.updateProfile("New User", null, "", false, null);
             } catch {
               // ignore
             }
@@ -273,6 +287,9 @@ export function useCreateTask() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-posted-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["available-tasks"] });
+      // Immediately refresh admin data when a new task is posted
+      queryClient.invalidateQueries({ queryKey: ["admin-all-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["platform-stats"] });
       toast.success("Task posted successfully!");
     },
     onError: (err: Error) => {
@@ -344,7 +361,7 @@ export function useMyAcceptedTasks() {
         const msg = String(err);
         if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
           try {
-            await actor.updateProfile("New User", null, "", false);
+            await actor.updateProfile("New User", null, "", false, null);
             return await actor.getMyAcceptedTasks();
           } catch {
             return [];
@@ -375,6 +392,8 @@ export function useAcceptTask() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["available-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["my-accepted-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["platform-stats"] });
       toast.success("Task accepted! Head to the store.");
     },
     onError: (err: Error) => {
@@ -397,6 +416,8 @@ export function useMarkInProgress() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-accepted-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["platform-stats"] });
       toast.success("Task marked in progress!");
     },
     onError: (err: Error) => {
@@ -419,6 +440,8 @@ export function useMarkDelivered() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-accepted-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["platform-stats"] });
       toast.success(
         "Marked as delivered! Now ask the customer for their OTP to complete the task.",
       );
@@ -448,6 +471,11 @@ export function useVerifyOtp() {
       queryClient.invalidateQueries({ queryKey: ["my-accepted-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["wallet-balance"] });
       queryClient.invalidateQueries({ queryKey: ["earnings-history"] });
+      // Refresh admin payment data immediately after OTP verification
+      queryClient.invalidateQueries({ queryKey: ["admin-all-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-payment-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-payout-records"] });
+      queryClient.invalidateQueries({ queryKey: ["platform-stats"] });
       toast.success("OTP verified! Payment released to your wallet.");
     },
     onError: (err: Error) => {
@@ -492,18 +520,23 @@ export function useRateTask() {
 
 export function usePlatformStats() {
   const { actor, isFetching } = useActor();
+  const { identity } = useInternetIdentity();
+  const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
   return useQuery({
     queryKey: ["platform-stats"],
     queryFn: async () => {
-      if (!actor) return null;
+      if (!actor || !isAuthenticated) return null;
       try {
-        return await actor.getPlatformStats();
-      } catch {
+        const result = await actor.getPlatformStats();
+        console.log("[Admin] getPlatformStats response:", result);
+        return result;
+      } catch (err) {
+        console.error("[Admin] getPlatformStats error:", err);
         return null;
       }
     },
-    enabled: !isFetching,
-    refetchInterval: 15000,
+    enabled: !!actor && !isFetching && isAuthenticated,
+    refetchInterval: 5000,
   });
 }
 
@@ -516,13 +549,17 @@ export function useIsAdmin() {
     queryFn: async () => {
       if (!actor || !isAuthenticated) return false;
       try {
-        return await actor.isCallerAdmin();
-      } catch {
+        const result = await actor.isCallerAdmin();
+        console.log("[Admin] isCallerAdmin:", result);
+        return result;
+      } catch (err) {
+        console.error("[Admin] isCallerAdmin error:", err);
+        // Do NOT grant admin on error — return false for security
         return false;
       }
     },
     enabled: !!actor && !isFetching && isAuthenticated,
-    staleTime: 60000,
+    staleTime: 30000,
   });
 }
 
@@ -534,7 +571,8 @@ export function useAdminCancelTask() {
     mutationFn: async (taskId: bigint) => {
       checkAuthenticated(identity);
       if (!actor) throw new Error("Not connected");
-      const result = await actor.cancelTask(taskId);
+      // Use adminCancelTask which bypasses owner check
+      const result = await actor.adminCancelTask(taskId);
       if (result.__kind__ === "err") throw new Error(result.err);
       return result.ok;
     },
@@ -545,6 +583,7 @@ export function useAdminCancelTask() {
       toast.success("Task cancelled by admin. Customer can re-post it.");
     },
     onError: (err: Error) => {
+      console.error("[Admin] adminCancelTask error:", err);
       toast.error(err.message || "Failed to cancel task");
     },
   });
@@ -566,6 +605,7 @@ export function useAdminBlockUser() {
       toast.success("User blocked. They can no longer accept tasks.");
     },
     onError: (err: Error) => {
+      console.error("[Admin] blockUser error:", err);
       toast.error(err.message || "Failed to block user");
     },
   });
@@ -578,17 +618,22 @@ export function useAdminAllTasks() {
   return useQuery<Task[]>({
     queryKey: ["admin-all-tasks"],
     queryFn: async () => {
-      if (!actor) return [];
+      if (!actor || !isAuthenticated) return [];
       try {
-        const result = await (actor as any).getAllTasks();
+        const result = await actor.getAllTasks();
+        console.log(
+          "[Admin] getAllTasks response: count=",
+          result.length,
+          result,
+        );
         return Array.isArray(result) ? result : [];
       } catch (e) {
-        console.error("getAllTasks error:", e);
+        console.error("[Admin] getAllTasks error:", e);
         return [];
       }
     },
     enabled: !!actor && !isFetching && isAuthenticated,
-    refetchInterval: 10000,
+    refetchInterval: 5000,
     staleTime: 0,
   });
 }
@@ -600,17 +645,102 @@ export function useAdminAllUsers() {
   return useQuery<PublicUserProfile[]>({
     queryKey: ["admin-all-users"],
     queryFn: async () => {
-      if (!actor) return [];
+      if (!actor || !isAuthenticated) return [];
       try {
-        const result = await (actor as any).getAllUserProfiles();
+        const result = await actor.getAllUserProfiles();
+        console.log(
+          "[Admin] getAllUserProfiles response: count=",
+          result.length,
+          result,
+        );
         return Array.isArray(result) ? result : [];
       } catch (e) {
-        console.error("getAllUserProfiles error:", e);
+        console.error("[Admin] getAllUserProfiles error:", e);
         return [];
       }
     },
     enabled: !!actor && !isFetching && isAuthenticated,
-    refetchInterval: 15000,
+    refetchInterval: 5000,
     staleTime: 0,
+  });
+}
+
+export function useAdminPaymentLogs() {
+  const { actor, isFetching } = useActor();
+  const { identity } = useInternetIdentity();
+  const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
+  return useQuery<PaymentLog[]>({
+    queryKey: ["admin-payment-logs"],
+    queryFn: async () => {
+      if (!actor || !isAuthenticated) return [];
+      try {
+        const result = await actor.getPaymentLogs();
+        console.log(
+          "[Admin] getPaymentLogs response: count=",
+          result.length,
+          result,
+        );
+        return Array.isArray(result) ? result : [];
+      } catch (e) {
+        console.error("[Admin] getPaymentLogs error:", e);
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching && isAuthenticated,
+    refetchInterval: 5000,
+    staleTime: 0,
+  });
+}
+
+export function useAdminPayoutRecords() {
+  const { actor, isFetching } = useActor();
+  const { identity } = useInternetIdentity();
+  const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
+  return useQuery<PayoutRecord[]>({
+    queryKey: ["admin-payout-records"],
+    queryFn: async () => {
+      if (!actor || !isAuthenticated) return [];
+      try {
+        const result = await actor.getPayoutRecords();
+        console.log(
+          "[Admin] getPayoutRecords response: count=",
+          result.length,
+          result,
+        );
+        return Array.isArray(result) ? result : [];
+      } catch (e) {
+        console.error("[Admin] getPayoutRecords error:", e);
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching && isAuthenticated,
+    refetchInterval: 5000,
+    staleTime: 0,
+  });
+}
+
+export function useAdminMarkPayoutPaid() {
+  const { actor } = useActor();
+  const { identity } = useInternetIdentity();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      taskId,
+      method,
+    }: { taskId: bigint; method: PayoutMethod }) => {
+      checkAuthenticated(identity);
+      if (!actor) throw new Error("Not connected");
+      const result = await actor.markPayoutPaid(taskId, method);
+      if (!result) throw new Error("Failed to mark payout as paid");
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-payout-records"] });
+      toast.success("Payout marked as paid!");
+    },
+    onError: (err: Error) => {
+      console.error("[Admin] markPayoutPaid error:", err);
+      toast.error(err.message || "Failed to mark payout as paid");
+    },
   });
 }
