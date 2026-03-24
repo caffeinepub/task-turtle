@@ -67,6 +67,7 @@ import {
   useAdminMarkPayoutPaid,
   useAdminPaymentLogs,
   useAdminPayoutRecords,
+  useAdminTaskers,
   useIsAdmin,
   usePlatformStats,
 } from "../hooks/useQueries";
@@ -2091,6 +2092,8 @@ export default function AdminDashboard() {
     isError: usersError,
     refetch: refetchUsers,
   } = useAdminAllUsers();
+  // useAdminTaskers triggers tasker-specific logging
+  useAdminTaskers();
   const { refetch: refetchPayments } = useAdminPaymentLogs();
   const { refetch: refetchPayouts } = useAdminPayoutRecords();
 
