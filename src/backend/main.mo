@@ -53,8 +53,6 @@ actor {
     #cancelled;
   };
 
-  // Internal stored type — matches the original stable layout (NO upiId).
-  // Must NOT change to preserve stable memory compatibility.
   type StoredProfile = {
     id : Principal;
     name : Text;
@@ -65,7 +63,6 @@ actor {
     isAvailableAsTasker : Bool;
   };
 
-  // Public API type — includes upiId sourced from the separate upiIds map.
   public type PublicUserProfile = {
     id : Principal;
     name : Text;
@@ -74,7 +71,6 @@ actor {
     rating : Nat;
     walletBalance : Nat;
     isAvailableAsTasker : Bool;
-    upiId : ?Text;
   };
 
   module PublicUserProfile {
@@ -134,8 +130,7 @@ actor {
   let tasks = Map.empty<Nat, Task>();
   // profiles uses StoredProfile (original layout) — stable-memory safe.
   let profiles = Map.empty<Principal, StoredProfile>();
-  // upiIds is a new map — no migration needed.
-  let upiIds = Map.empty<Principal, Text>();
+  let upiIds = Map.empty<Principal, Text>(); // kept for stable memory compatibility
   let ratingCounts = Map.empty<Principal, Nat>();
   let paymentLogs = Map.empty<Nat, PaymentLog>();
   let payoutRecords = Map.empty<Nat, PayoutRecord>();
@@ -145,7 +140,6 @@ actor {
   var platformFees = 0;
   var stripeConfig : ?Stripe.StripeConfiguration = null;
 
-  // Helper: combine StoredProfile + upiId lookup into the public type.
   func toPublicProfile(p : StoredProfile) : PublicUserProfile = {
     id = p.id;
     name = p.name;
@@ -154,7 +148,6 @@ actor {
     rating = p.rating;
     walletBalance = p.walletBalance;
     isAvailableAsTasker = p.isAvailableAsTasker;
-    upiId = upiIds.get(p.id);
   };
 
   func isUser(caller : Principal) : Bool {
@@ -196,10 +189,6 @@ actor {
       isAvailableAsTasker = profile.isAvailableAsTasker;
     };
     profiles.add(caller, stored);
-    switch (profile.upiId) {
-      case (null) {};
-      case (?upi) { upiIds.add(caller, upi) };
-    };
   };
 
   public query ({ caller }) func getTaskById(id : Nat) : async TaskResult {
@@ -261,12 +250,6 @@ actor {
       isAvailableAsTasker;
     };
     profiles.add(caller, stored);
-
-    // Store upiId separately
-    switch (upiId) {
-      case (null) {};
-      case (?upi) { upiIds.add(caller, upi) };
-    };
   };
 
   public shared ({ caller }) func createTask(title : Text, description : Text, amount : Nat, tip : ?Nat, customerLocation : Text, storeLocation : Text) : async Nat {
@@ -497,7 +480,7 @@ actor {
     tasks.values().toArray();
   };
 
-  // Admin: get ALL user profiles (with upiId)
+  // Admin: get ALL user profiles
   public query ({ caller }) func getAllUserProfiles() : async [PublicUserProfile] {
     if (caller.isAnonymous()) { return [] };
     profiles.values().toArray().map(toPublicProfile);

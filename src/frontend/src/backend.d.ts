@@ -63,7 +63,7 @@ export interface PublicUserProfile {
     phone?: string;
     location: string;
     walletBalance: bigint;
-    upiId?: string;
+
 }
 export interface TaskUpdateRequest {
     tip?: bigint;

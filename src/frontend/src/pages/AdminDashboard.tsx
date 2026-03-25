@@ -67,7 +67,6 @@ import {
   useAdminMarkPayoutPaid,
   useAdminPaymentLogs,
   useAdminPayoutRecords,
-  useAdminTaskers,
   useIsAdmin,
   usePlatformStats,
 } from "../hooks/useQueries";
@@ -793,7 +792,6 @@ function AllTasksTab({
                 <TableHead className="text-xs">Posted By</TableHead>
                 <TableHead className="text-xs">Price</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Tasker UPI</TableHead>
                 <TableHead className="text-xs whitespace-nowrap">
                   Created Date
                 </TableHead>
@@ -870,55 +868,6 @@ function AllTasksTab({
                       </TableCell>
                       <TableCell>
                         <TaskStatusBadge status={task.status} />
-                      </TableCell>
-                      <TableCell>
-                        {task.taskerId ? (
-                          (() => {
-                            const tasker = profileMap.get(
-                              task.taskerId.toString(),
-                            );
-                            if (tasker?.upiId) {
-                              return (
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-mono text-foreground truncate max-w-[100px]">
-                                    {tasker.upiId}
-                                  </span>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-6 w-6 p-0 text-muted-foreground hover:text-green-vivid"
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(
-                                        tasker.upiId!,
-                                      );
-                                      toast.success("UPI copied!");
-                                    }}
-                                    title="Copy UPI ID"
-                                  >
-                                    <Copy className="w-3 h-3" />
-                                  </Button>
-                                </div>
-                              );
-                            }
-                            if (tasker) {
-                              return (
-                                <span className="text-xs text-yellow-400 flex items-center gap-1">
-                                  <AlertCircle className="w-3 h-3" />
-                                  No UPI
-                                </span>
-                              );
-                            }
-                            return (
-                              <span className="text-xs text-muted-foreground">
-                                —
-                              </span>
-                            );
-                          })()
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            —
-                          </span>
-                        )}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                         {formatTimestamp(task.createdAt)}
@@ -1341,31 +1290,6 @@ function TaskerProfileDialog({
               <p className="text-sm">{user.location || "—"}</p>
             </div>
             <div className="bg-secondary/40 rounded-xl p-3">
-              <p className="text-xs text-muted-foreground mb-1">UPI ID</p>
-              {user.upiId ? (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-mono">{user.upiId}</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 w-6 p-0 text-muted-foreground hover:text-green-vivid"
-                    onClick={() => {
-                      navigator.clipboard.writeText(user.upiId!);
-                      toast.success("UPI copied!");
-                    }}
-                    title="Copy UPI ID"
-                  >
-                    <Copy className="w-3 h-3" />
-                  </Button>
-                </div>
-              ) : (
-                <span className="text-xs text-yellow-400 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  No UPI – cannot payout
-                </span>
-              )}
-            </div>
-            <div className="bg-secondary/40 rounded-xl p-3">
               <p className="text-xs text-muted-foreground mb-1">
                 Completed Tasks
               </p>
@@ -1520,7 +1444,6 @@ function TaskersTab({
                 <TableHead className="text-xs">Name</TableHead>
                 <TableHead className="text-xs">Phone</TableHead>
                 <TableHead className="text-xs">Location</TableHead>
-                <TableHead className="text-xs">UPI ID</TableHead>
                 <TableHead className="text-xs">Completed</TableHead>
                 <TableHead className="text-xs">Active</TableHead>
                 <TableHead className="text-xs">Total Earnings</TableHead>
@@ -1585,32 +1508,6 @@ function TaskersTab({
                             {user.location || "—"}
                           </span>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {user.upiId ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-mono text-foreground truncate max-w-[120px]">
-                              {user.upiId}
-                            </span>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0 text-muted-foreground hover:text-green-vivid"
-                              onClick={() => {
-                                navigator.clipboard.writeText(user.upiId!);
-                                toast.success("UPI copied!");
-                              }}
-                              title="Copy UPI ID"
-                            >
-                              <Copy className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-yellow-400 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            No UPI
-                          </span>
-                        )}
                       </TableCell>
                       <TableCell>
                         <span className="text-sm font-bold text-green-vivid">
@@ -1941,35 +1838,6 @@ function PayoutsTab({
                       <p className="text-xs text-muted-foreground font-mono">
                         {truncatePrincipal(payout.taskerId.toString())}
                       </p>
-                      {(() => {
-                        const t = users.find(
-                          (u) => u.id.toString() === payout.taskerId.toString(),
-                        );
-                        return t?.upiId ? (
-                          <div className="flex items-center gap-1 mt-1">
-                            <span className="text-xs font-mono text-green-vivid truncate max-w-[120px]">
-                              {t.upiId}
-                            </span>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-5 w-5 p-0 text-muted-foreground hover:text-green-vivid"
-                              onClick={() => {
-                                navigator.clipboard.writeText(t.upiId!);
-                                toast.success("UPI copied!");
-                              }}
-                              title="Copy UPI ID"
-                            >
-                              <Copy className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-yellow-400 flex items-center gap-1 mt-1">
-                            <AlertCircle className="w-3 h-3" />
-                            No UPI
-                          </span>
-                        );
-                      })()}
                     </TableCell>
                     <TableCell className="font-bold text-sm text-green-vivid">
                       {formatINR(payout.amount)}
@@ -2092,8 +1960,6 @@ export default function AdminDashboard() {
     isError: usersError,
     refetch: refetchUsers,
   } = useAdminAllUsers();
-  // useAdminTaskers triggers tasker-specific logging
-  useAdminTaskers();
   const { refetch: refetchPayments } = useAdminPaymentLogs();
   const { refetch: refetchPayouts } = useAdminPayoutRecords();
 

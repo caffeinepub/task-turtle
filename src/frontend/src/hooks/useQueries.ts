@@ -117,13 +117,11 @@ export function useUpdateProfile() {
       phone,
       location,
       isAvailableAsTasker,
-      upiId,
     }: {
       name: string;
       phone: string | null;
       location: string;
       isAvailableAsTasker: boolean;
-      upiId?: string | null;
     }) => {
       checkAuthenticated(identity);
       if (!actor) throw new Error("Not connected");
@@ -132,7 +130,7 @@ export function useUpdateProfile() {
         phone,
         location,
         isAvailableAsTasker,
-        upiId ?? null,
+        null,
       );
     },
     onSuccess: () => {
@@ -605,7 +603,6 @@ export function useAdminBlockUser() {
       toast.success("User blocked. They can no longer accept tasks.");
     },
     onError: (err: Error) => {
-      console.error("[Admin] blockUser error:", err);
       toast.error(err.message || "Failed to block user");
     },
   });
@@ -621,14 +618,8 @@ export function useAdminAllTasks() {
       if (!actor || !isAuthenticated) return [];
       try {
         const result = await actor.getAllTasks();
-        console.log(
-          "[Admin] getAllTasks response: count=",
-          result.length,
-          result,
-        );
         return Array.isArray(result) ? result : [];
-      } catch (e) {
-        console.error("[Admin] getAllTasks error:", e);
+      } catch (_e) {
         return [];
       }
     },
@@ -647,36 +638,12 @@ export function useAdminAllUsers() {
     queryFn: async () => {
       if (!actor || !isAuthenticated) return [];
       const result = await actor.getAllUserProfiles();
-      const users = Array.isArray(result) ? result : [];
-      // Normalize upiId: Candid ?Text may come as [] | [string] via some paths
-      const normalized = users.map((u) => ({
-        ...u,
-        upiId: Array.isArray(u.upiId)
-          ? (u.upiId[0] ?? undefined)
-          : (u.upiId ?? undefined),
-      }));
-      console.log(
-        "[Admin] useAdminAllUsers response: count=",
-        normalized.length,
-        normalized,
-      );
-      return normalized;
+      return Array.isArray(result) ? result : [];
     },
     enabled: !!actor && !isFetching && isAuthenticated,
     refetchInterval: 5000,
     staleTime: 0,
   });
-}
-
-export function useAdminTaskers() {
-  const result = useAdminAllUsers();
-  const taskers = (result.data ?? []).filter((u) => u.isAvailableAsTasker);
-  console.log(
-    "[Admin] useAdminTaskers derived: count=",
-    taskers.length,
-    taskers,
-  );
-  return { ...result, data: taskers };
 }
 
 export function useAdminPaymentLogs() {
