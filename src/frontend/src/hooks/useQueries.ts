@@ -637,13 +637,26 @@ export function useAdminAllUsers() {
     queryKey: ["admin-all-users"],
     queryFn: async () => {
       if (!actor || !isAuthenticated) return [];
-      const result = await actor.getAllUserProfiles();
-      return Array.isArray(result) ? result : [];
+      try {
+        const res = await actor.getAllUserProfiles();
+        console.log("[Admin] Users:", res);
+        return res || [];
+      } catch (err) {
+        console.error("[Admin] Users Error:", err);
+        throw err;
+      }
     },
     enabled: !!actor && !isFetching && isAuthenticated,
     refetchInterval: 5000,
     staleTime: 0,
   });
+}
+
+export function useAdminTaskers() {
+  const { data: users = [], isLoading, isError, refetch } = useAdminAllUsers();
+  const taskers = users.filter((u) => u.isAvailableAsTasker === true);
+  console.log("[Admin] Taskers:", taskers);
+  return { data: taskers, isLoading, isError, refetch };
 }
 
 export function useAdminPaymentLogs() {

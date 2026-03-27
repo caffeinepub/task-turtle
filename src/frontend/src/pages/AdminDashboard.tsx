@@ -67,6 +67,7 @@ import {
   useAdminMarkPayoutPaid,
   useAdminPaymentLogs,
   useAdminPayoutRecords,
+  useAdminTaskers,
   useIsAdmin,
   usePlatformStats,
 } from "../hooks/useQueries";
@@ -1375,10 +1376,7 @@ function TaskersTab({
     useState<PublicUserProfile | null>(null);
   const blockUser = useAdminBlockUser();
 
-  const taskers = useMemo(
-    () => users.filter((u) => u.isAvailableAsTasker),
-    [users],
-  );
+  const taskers = users.filter((u) => u.isAvailableAsTasker === true);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return taskers;
@@ -1960,6 +1958,7 @@ export default function AdminDashboard() {
     isError: usersError,
     refetch: refetchUsers,
   } = useAdminAllUsers();
+  const { data: taskers = [] } = useAdminTaskers();
   const { refetch: refetchPayments } = useAdminPaymentLogs();
   const { refetch: refetchPayouts } = useAdminPayoutRecords();
 
@@ -1999,7 +1998,7 @@ export default function AdminDashboard() {
   const tabCounts: Partial<Record<AdminTab, number>> = {
     tasks: tasks.length,
     users: users.length,
-    taskers: users.filter((u) => u.isAvailableAsTasker).length,
+    taskers: taskers.length,
   };
 
   if (checkingAdmin) {
