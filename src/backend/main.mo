@@ -395,7 +395,7 @@ actor {
 
               let totalAmount = task.amount + tip;
               let fee = (totalAmount * 5) / 100;
-              let taskerAmt = totalAmount - fee;
+              let taskerAmt = if (totalAmount > fee) { totalAmount - fee } else { 0 };
               platformFees += fee;
 
               // Record payment log
@@ -483,7 +483,22 @@ actor {
   // Admin: get ALL user profiles
   public query ({ caller }) func getAllUserProfiles() : async [PublicUserProfile] {
     if (caller.isAnonymous()) { return [] };
-    profiles.values().toArray().map(toPublicProfile);
+    return profiles.values().toArray().map(toPublicProfile);
+  };
+
+  // Seed test users for debugging/testing when profiles is empty
+  public func seedUsers() : async () {
+    if (profiles.size() > 0) { return };
+    let p1 = Principal.fromText("2vxsx-fae");
+    profiles.add(p1, {
+      id = p1;
+      name = "Test Tasker";
+      phone = ?"9999999999";
+      location = "Mumbai";
+      rating = 4;
+      walletBalance = 500;
+      isAvailableAsTasker = true;
+    });
   };
 
   // Admin: cancel any task regardless of status/owner
@@ -780,4 +795,15 @@ actor {
       cancelledTasks = allTasks.filter(func(task) { task.status == #cancelled }).size();
     };
   };
+
+  // DEBUG: Count users (profiles) in stable storage
+  public query func debugUsersCount() : async Nat {
+    return profiles.size();
+  };
+
+  // DEBUG: Count tasks in stable storage
+  public query func debugTasksCount() : async Nat {
+    return tasks.size();
+  };
+
 };

@@ -144,6 +144,8 @@ export interface _SERVICE {
   'getWalletBalance' : ActorMethod<[], bigint>,
   'getAllTasks' : ActorMethod<[], Array<Task>>,
   'getAllUserProfiles' : ActorMethod<[], Array<PublicUserProfile>>,
+  'debugUsersCount' : ActorMethod<[], bigint>,
+  'debugTasksCount' : ActorMethod<[], bigint>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'isStripeConfigured' : ActorMethod<[], boolean>,
   'markPayoutPaid' : ActorMethod<[bigint, PayoutMethod], boolean>,

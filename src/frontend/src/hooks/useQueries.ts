@@ -639,8 +639,13 @@ export function useAdminAllUsers() {
       if (!actor || !isAuthenticated) return [];
       try {
         const res = await actor.getAllUserProfiles();
-        console.log("[Admin] Users:", res);
-        return res || [];
+        console.log("RAW BACKEND DATA:", res);
+        // Fix: Always ensure it's an array before processing
+        return Array.isArray(res)
+          ? res
+          : res && (res as any).length !== undefined
+            ? (res as PublicUserProfile[])
+            : [];
       } catch (err) {
         console.error("[Admin] Users Error:", err);
         throw err;

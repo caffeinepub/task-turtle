@@ -171,6 +171,8 @@ export interface backendInterface {
     getTaskById(id: bigint): Promise<TaskResult>;
     getUserProfile(user: Principal): Promise<PublicUserProfile>;
     getWalletBalance(): Promise<bigint>;
+    debugUsersCount(): Promise<bigint>;
+    debugTasksCount(): Promise<bigint>;
     isCallerAdmin(): Promise<boolean>;
     isStripeConfigured(): Promise<boolean>;
     markPayoutPaid(taskId: bigint, method: PayoutMethod): Promise<boolean>;
