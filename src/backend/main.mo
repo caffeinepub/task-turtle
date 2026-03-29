@@ -71,6 +71,7 @@ actor {
     rating : Nat;
     walletBalance : Nat;
     isAvailableAsTasker : Bool;
+    upiId : ?Text;
   };
 
   module PublicUserProfile {
@@ -148,6 +149,7 @@ actor {
     rating = p.rating;
     walletBalance = p.walletBalance;
     isAvailableAsTasker = p.isAvailableAsTasker;
+    upiId = upiIds.get(p.id);
   };
 
   func isUser(caller : Principal) : Bool {
@@ -189,6 +191,10 @@ actor {
       isAvailableAsTasker = profile.isAvailableAsTasker;
     };
     profiles.add(caller, stored);
+    switch (profile.upiId) {
+      case (null) {};
+      case (?uid) { upiIds.add(caller, uid) };
+    };
   };
 
   public query ({ caller }) func getTaskById(id : Nat) : async TaskResult {
@@ -250,6 +256,10 @@ actor {
       isAvailableAsTasker;
     };
     profiles.add(caller, stored);
+    switch (upiId) {
+      case (null) {};
+      case (?uid) { upiIds.add(caller, uid) };
+    };
   };
 
   public shared ({ caller }) func createTask(title : Text, description : Text, amount : Nat, tip : ?Nat, customerLocation : Text, storeLocation : Text) : async Nat {

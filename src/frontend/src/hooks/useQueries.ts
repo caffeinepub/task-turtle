@@ -614,7 +614,7 @@ export function useAdminAllTasks() {
   const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
   return useQuery<Task[]>({
     queryKey: ["admin-all-tasks"],
-    queryFn: async () => {
+    queryFn: async (): Promise<Task[]> => {
       if (!actor || !isAuthenticated) return [];
       try {
         const result = await actor.getAllTasks();
@@ -625,7 +625,7 @@ export function useAdminAllTasks() {
     },
     enabled: !!actor && !isFetching && isAuthenticated,
     refetchInterval: 5000,
-    staleTime: 0,
+    staleTime: 2000,
   });
 }
 
