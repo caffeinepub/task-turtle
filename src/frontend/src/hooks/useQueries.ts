@@ -285,7 +285,6 @@ export function useCreateTask() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-posted-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["available-tasks"] });
-      // Immediately refresh admin data when a new task is posted
       queryClient.invalidateQueries({ queryKey: ["admin-all-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["platform-stats"] });
       toast.success("Task posted successfully!");
@@ -469,7 +468,6 @@ export function useVerifyOtp() {
       queryClient.invalidateQueries({ queryKey: ["my-accepted-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["wallet-balance"] });
       queryClient.invalidateQueries({ queryKey: ["earnings-history"] });
-      // Refresh admin payment data immediately after OTP verification
       queryClient.invalidateQueries({ queryKey: ["admin-all-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["admin-payment-logs"] });
       queryClient.invalidateQueries({ queryKey: ["admin-payout-records"] });
@@ -535,6 +533,7 @@ export function usePlatformStats() {
     },
     enabled: !!actor && !isFetching && isAuthenticated,
     refetchInterval: 5000,
+    staleTime: 2000,
   });
 }
 
@@ -552,7 +551,6 @@ export function useIsAdmin() {
         return result;
       } catch (err) {
         console.error("[Admin] isCallerAdmin error:", err);
-        // Do NOT grant admin on error — return false for security
         return false;
       }
     },
@@ -569,7 +567,6 @@ export function useAdminCancelTask() {
     mutationFn: async (taskId: bigint) => {
       checkAuthenticated(identity);
       if (!actor) throw new Error("Not connected");
-      // Use adminCancelTask which bypasses owner check
       const result = await actor.adminCancelTask(taskId);
       if (result.__kind__ === "err") throw new Error(result.err);
       return result.ok;
@@ -616,16 +613,21 @@ export function useAdminAllTasks() {
     queryKey: ["admin-all-tasks"],
     queryFn: async (): Promise<Task[]> => {
       if (!actor || !isAuthenticated) return [];
-      try {
-        const result = await actor.getAllTasks();
-        return Array.isArray(result) ? result : [];
-      } catch (_e) {
-        return [];
-      }
+      // Do NOT catch errors here — let React Query handle them
+      // so data is preserved on transient failures (prevents flickering)
+      const result = await actor.getAllTasks();
+      console.log(
+        "[Admin] getAllTasks response: count=",
+        result?.length,
+        result,
+      );
+      return Array.isArray(result) ? result : [];
     },
     enabled: !!actor && !isFetching && isAuthenticated,
     refetchInterval: 5000,
-    staleTime: 2000,
+    staleTime: 3000,
+    // Keep previous data on error so the table doesn't vanish
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -637,30 +639,26 @@ export function useAdminAllUsers() {
     queryKey: ["admin-all-users"],
     queryFn: async () => {
       if (!actor || !isAuthenticated) return [];
-      try {
-        const res = await actor.getAllUserProfiles();
-        console.log("RAW BACKEND DATA:", res);
-        // Fix: Always ensure it's an array before processing
-        return Array.isArray(res)
-          ? res
-          : res && (res as any).length !== undefined
-            ? (res as PublicUserProfile[])
-            : [];
-      } catch (err) {
-        console.error("[Admin] Users Error:", err);
-        throw err;
-      }
+      // Do NOT catch — let React Query manage error state properly
+      const res = await actor.getAllUserProfiles();
+      console.log(
+        "[Admin] getAllUserProfiles response: count=",
+        res?.length,
+        res,
+      );
+      return Array.isArray(res) ? res : [];
     },
     enabled: !!actor && !isFetching && isAuthenticated,
     refetchInterval: 5000,
-    staleTime: 0,
+    staleTime: 3000,
+    // Keep previous data on error so the table doesn't vanish
+    placeholderData: (previousData) => previousData,
   });
 }
 
 export function useAdminTaskers() {
   const { data: users = [], isLoading, isError, refetch } = useAdminAllUsers();
   const taskers = users.filter((u) => u.isAvailableAsTasker === true);
-  console.log("[Admin] Taskers:", taskers);
   return { data: taskers, isLoading, isError, refetch };
 }
 
@@ -687,7 +685,7 @@ export function useAdminPaymentLogs() {
     },
     enabled: !!actor && !isFetching && isAuthenticated,
     refetchInterval: 5000,
-    staleTime: 0,
+    staleTime: 3000,
   });
 }
 
@@ -714,7 +712,7 @@ export function useAdminPayoutRecords() {
     },
     enabled: !!actor && !isFetching && isAuthenticated,
     refetchInterval: 5000,
-    staleTime: 0,
+    staleTime: 3000,
   });
 }
 

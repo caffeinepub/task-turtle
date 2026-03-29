@@ -56,11 +56,15 @@ export const PublicUserProfile = IDL.Record({
   'phone' : IDL.Opt(IDL.Text),
   'location' : IDL.Text,
   'walletBalance' : IDL.Nat,
+  'upiId' : IDL.Opt(IDL.Text),
 });
 export const TaskStats = IDL.Record({
   'totalTasks' : IDL.Nat,
   'completedTasks' : IDL.Nat,
   'totalFees' : IDL.Nat,
+  'totalUsers' : IDL.Nat,
+  'activeTasks' : IDL.Nat,
+  'cancelledTasks' : IDL.Nat,
 });
 export const StripeSessionStatus = IDL.Variant({
   'completed' : IDL.Record({
@@ -183,7 +187,7 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'updateProfile' : IDL.Func(
-      [IDL.Text, IDL.Opt(IDL.Text), IDL.Text, IDL.Bool],
+      [IDL.Text, IDL.Opt(IDL.Text), IDL.Text, IDL.Bool, IDL.Opt(IDL.Text)],
       [],
       [],
     ),
@@ -242,11 +246,15 @@ export const idlFactory = ({ IDL }) => {
     'phone' : IDL.Opt(IDL.Text),
     'location' : IDL.Text,
     'walletBalance' : IDL.Nat,
+    'upiId' : IDL.Opt(IDL.Text),
   });
   const TaskStats = IDL.Record({
     'totalTasks' : IDL.Nat,
     'completedTasks' : IDL.Nat,
     'totalFees' : IDL.Nat,
+    'totalUsers' : IDL.Nat,
+    'activeTasks' : IDL.Nat,
+    'cancelledTasks' : IDL.Nat,
   });
   const StripeSessionStatus = IDL.Variant({
     'completed' : IDL.Record({
@@ -370,7 +378,7 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'updateProfile' : IDL.Func(
-        [IDL.Text, IDL.Opt(IDL.Text), IDL.Text, IDL.Bool],
+        [IDL.Text, IDL.Opt(IDL.Text), IDL.Text, IDL.Bool, IDL.Opt(IDL.Text)],
         [],
         [],
       ),

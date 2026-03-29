@@ -60,6 +60,9 @@ export interface TaskStats {
   'totalTasks' : bigint,
   'completedTasks' : bigint,
   'totalFees' : bigint,
+  'totalUsers' : bigint,
+  'activeTasks' : bigint,
+  'cancelledTasks' : bigint,
 }
 export type TaskStatus = { 'cancelled' : null } |
   { 'completed' : null } |
