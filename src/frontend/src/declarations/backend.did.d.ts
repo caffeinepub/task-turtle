@@ -19,6 +19,7 @@ export interface PublicUserProfile {
   'location' : string,
   'walletBalance' : bigint,
   'upiId' : [] | [string],
+  'aadharOrStudentId' : [] | [string],
 }
 export interface ShoppingItem {
   'productName' : string,
@@ -159,7 +160,7 @@ export interface _SERVICE {
   'setStripeConfiguration' : ActorMethod<[StripeConfiguration], undefined>,
   'transform' : ActorMethod<[TransformationInput], TransformationOutput>,
   'updateProfile' : ActorMethod<
-    [string, [] | [string], string, boolean, [] | [string]],
+    [string, [] | [string], string, boolean, [] | [string], [] | [string]],
     undefined
   >,
   'updateTask' : ActorMethod<[bigint, TaskUpdateRequest], undefined>,

@@ -37,7 +37,14 @@ export function useEnsureProfile() {
         try {
           const existing = await actor.getCallerUserProfile();
           if (!existing) {
-            await actor.updateProfile("New User", null, "", false, null);
+            await (actor as any).updateProfile(
+              "New User",
+              null,
+              "",
+              false,
+              null,
+              null,
+            );
           }
           return true;
         } catch (err) {
@@ -52,14 +59,28 @@ export function useEnsureProfile() {
               continue;
             }
             try {
-              await actor.updateProfile("New User", null, "", false, null);
+              await (actor as any).updateProfile(
+                "New User",
+                null,
+                "",
+                false,
+                null,
+                null,
+              );
               return true;
             } catch {
               return null;
             }
           }
           try {
-            await actor.updateProfile("New User", null, "", false, null);
+            await (actor as any).updateProfile(
+              "New User",
+              null,
+              "",
+              false,
+              null,
+              null,
+            );
             return true;
           } catch {
             return null;
@@ -92,7 +113,14 @@ export function useProfile() {
         const msg = String(err);
         if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
           try {
-            await actor.updateProfile("New User", null, "", false, null);
+            await (actor as any).updateProfile(
+              "New User",
+              null,
+              "",
+              false,
+              null,
+              null,
+            );
             return await actor.getCallerUserProfile();
           } catch {
             return null;
@@ -117,20 +145,25 @@ export function useUpdateProfile() {
       phone,
       location,
       isAvailableAsTasker,
+      upiId,
+      aadharOrStudentId,
     }: {
       name: string;
       phone: string | null;
       location: string;
       isAvailableAsTasker: boolean;
+      upiId?: string | null;
+      aadharOrStudentId?: string | null;
     }) => {
       checkAuthenticated(identity);
       if (!actor) throw new Error("Not connected");
-      return actor.updateProfile(
+      return (actor as any).updateProfile(
         name,
         phone,
         location,
         isAvailableAsTasker,
-        null,
+        upiId ?? null,
+        aadharOrStudentId ?? null,
       );
     },
     onSuccess: () => {
@@ -200,7 +233,14 @@ export function useMyPostedTasks(options?: { refetchInterval?: number }) {
         const msg = String(err);
         if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
           try {
-            await actor.updateProfile("New User", null, "", false, null);
+            await (actor as any).updateProfile(
+              "New User",
+              null,
+              "",
+              false,
+              null,
+              null,
+            );
             return await actor.getMyPostedTasks();
           } catch {
             return [];
@@ -246,11 +286,25 @@ export function useCreateTask() {
           try {
             const profile = await actor.getCallerUserProfile();
             if (!profile) {
-              await actor.updateProfile("New User", null, "", false, null);
+              await (actor as any).updateProfile(
+                "New User",
+                null,
+                "",
+                false,
+                null,
+                null,
+              );
             }
           } catch {
             try {
-              await actor.updateProfile("New User", null, "", false, null);
+              await (actor as any).updateProfile(
+                "New User",
+                null,
+                "",
+                false,
+                null,
+                null,
+              );
             } catch {
               // ignore
             }
@@ -358,7 +412,14 @@ export function useMyAcceptedTasks() {
         const msg = String(err);
         if (msg.includes("Unauthorized") || msg.includes("Only users can")) {
           try {
-            await actor.updateProfile("New User", null, "", false, null);
+            await (actor as any).updateProfile(
+              "New User",
+              null,
+              "",
+              false,
+              null,
+              null,
+            );
             return await actor.getMyAcceptedTasks();
           } catch {
             return [];

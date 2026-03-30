@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
+  CreditCard,
+  IdCard,
   Loader2,
   MapPin,
   Phone,
@@ -36,6 +38,8 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
   const [isAvailable, setIsAvailable] = useState(false);
+  const [upiId, setUpiId] = useState("");
+  const [aadharOrStudentId, setAadharOrStudentId] = useState("");
 
   // Sync form when profile loads
   useEffect(() => {
@@ -44,6 +48,8 @@ export default function ProfilePage() {
       setPhone(profile.phone ?? "");
       setLocation(profile.location ?? "");
       setIsAvailable(profile.isAvailableAsTasker ?? false);
+      setUpiId((profile as any).upiId ?? "");
+      setAadharOrStudentId((profile as any).aadharOrStudentId ?? "");
     }
   }, [profile]);
 
@@ -54,6 +60,8 @@ export default function ProfilePage() {
       phone: phone || null,
       location,
       isAvailableAsTasker: isAvailable,
+      upiId: upiId || null,
+      aadharOrStudentId: aadharOrStudentId || null,
     });
   };
 
@@ -162,7 +170,7 @@ export default function ProfilePage() {
                 </Label>
                 <Input
                   id="profile-name"
-                  data-ocid="auth.name_input"
+                  data-ocid="profile.name_input"
                   placeholder="e.g., Arjun Singh"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -189,6 +197,47 @@ export default function ProfilePage() {
                   placeholder="e.g., +91 98765 43210"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  className="bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12"
+                />
+              </div>
+
+              {/* UPI ID */}
+              <div className="space-y-2">
+                <Label htmlFor="profile-upi" className="text-sm font-semibold">
+                  <CreditCard className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
+                  UPI ID
+                  <span className="text-muted-foreground font-normal ml-1">
+                    — optional
+                  </span>
+                </Label>
+                <Input
+                  id="profile-upi"
+                  data-ocid="profile.upi_input"
+                  placeholder="e.g., name@upi or 9876543210@paytm"
+                  value={upiId}
+                  onChange={(e) => setUpiId(e.target.value)}
+                  className="bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12"
+                />
+              </div>
+
+              {/* Aadhar / Student ID */}
+              <div className="space-y-2">
+                <Label
+                  htmlFor="profile-aadhar"
+                  className="text-sm font-semibold"
+                >
+                  <IdCard className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
+                  Aadhar No. / Student ID
+                  <span className="text-muted-foreground font-normal ml-1">
+                    — optional
+                  </span>
+                </Label>
+                <Input
+                  id="profile-aadhar"
+                  data-ocid="profile.aadhar_input"
+                  placeholder="e.g., 1234 5678 9012 or STUDENT-001"
+                  value={aadharOrStudentId}
+                  onChange={(e) => setAadharOrStudentId(e.target.value)}
                   className="bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12"
                 />
               </div>

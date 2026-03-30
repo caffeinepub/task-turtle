@@ -57,6 +57,7 @@ export const PublicUserProfile = IDL.Record({
   'location' : IDL.Text,
   'walletBalance' : IDL.Nat,
   'upiId' : IDL.Opt(IDL.Text),
+  'aadharOrStudentId' : IDL.Opt(IDL.Text),
 });
 export const TaskStats = IDL.Record({
   'totalTasks' : IDL.Nat,
@@ -187,12 +188,13 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'updateProfile' : IDL.Func(
-      [IDL.Text, IDL.Opt(IDL.Text), IDL.Text, IDL.Bool, IDL.Opt(IDL.Text)],
+      [IDL.Text, IDL.Opt(IDL.Text), IDL.Text, IDL.Bool, IDL.Opt(IDL.Text), IDL.Opt(IDL.Text)],
       [],
       [],
     ),
   'updateTask' : IDL.Func([IDL.Nat, TaskUpdateRequest], [], []),
   'verifyOtp' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Bool], []),
+  'seedUsers' : IDL.Func([], [], []),
 });
 
 export const idlInitArgs = [];
@@ -247,6 +249,7 @@ export const idlFactory = ({ IDL }) => {
     'location' : IDL.Text,
     'walletBalance' : IDL.Nat,
     'upiId' : IDL.Opt(IDL.Text),
+    'aadharOrStudentId' : IDL.Opt(IDL.Text),
   });
   const TaskStats = IDL.Record({
     'totalTasks' : IDL.Nat,
@@ -378,12 +381,13 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'updateProfile' : IDL.Func(
-        [IDL.Text, IDL.Opt(IDL.Text), IDL.Text, IDL.Bool, IDL.Opt(IDL.Text)],
+        [IDL.Text, IDL.Opt(IDL.Text), IDL.Text, IDL.Bool, IDL.Opt(IDL.Text), IDL.Opt(IDL.Text)],
         [],
         [],
       ),
     'updateTask' : IDL.Func([IDL.Nat, TaskUpdateRequest], [], []),
     'verifyOtp' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Bool], []),
+    'seedUsers' : IDL.Func([], [], []),
   });
 };
 

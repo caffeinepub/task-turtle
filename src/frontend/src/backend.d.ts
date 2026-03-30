@@ -64,6 +64,7 @@ export interface PublicUserProfile {
     location: string;
     walletBalance: bigint;
     upiId?: string;
+    aadharOrStudentId?: string;
 }
 export interface TaskUpdateRequest {
     tip?: bigint;
@@ -182,7 +183,7 @@ export interface backendInterface {
     saveCallerUserProfile(profile: PublicUserProfile): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
-    updateProfile(name: string, phone: string | null, location: string, isAvailableAsTasker: boolean, upiId: string | null): Promise<void>;
+    updateProfile(name: string, phone: string | null, location: string, isAvailableAsTasker: boolean, upiId: string | null, aadharOrStudentId: string | null): Promise<void>;
     updateTask(taskId: bigint, update: TaskUpdateRequest): Promise<void>;
     verifyOtp(taskId: bigint, otp: bigint): Promise<boolean>;
 }

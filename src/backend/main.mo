@@ -72,6 +72,7 @@ actor {
     walletBalance : Nat;
     isAvailableAsTasker : Bool;
     upiId : ?Text;
+    aadharOrStudentId : ?Text;
   };
 
   module PublicUserProfile {
@@ -129,9 +130,9 @@ actor {
   include MixinAuthorization(accessControlState);
 
   let tasks = Map.empty<Nat, Task>();
-  // profiles uses StoredProfile (original layout) — stable-memory safe.
   let profiles = Map.empty<Principal, StoredProfile>();
-  let upiIds = Map.empty<Principal, Text>(); // kept for stable memory compatibility
+  let upiIds = Map.empty<Principal, Text>();
+  let aadharOrStudentIds = Map.empty<Principal, Text>();
   let ratingCounts = Map.empty<Principal, Nat>();
   let paymentLogs = Map.empty<Nat, PaymentLog>();
   let payoutRecords = Map.empty<Nat, PayoutRecord>();
@@ -150,6 +151,7 @@ actor {
     walletBalance = p.walletBalance;
     isAvailableAsTasker = p.isAvailableAsTasker;
     upiId = upiIds.get(p.id);
+    aadharOrStudentId = aadharOrStudentIds.get(p.id);
   };
 
   func isUser(caller : Principal) : Bool {
@@ -195,6 +197,10 @@ actor {
       case (null) {};
       case (?uid) { upiIds.add(caller, uid) };
     };
+    switch (profile.aadharOrStudentId) {
+      case (null) {};
+      case (?aid) { aadharOrStudentIds.add(caller, aid) };
+    };
   };
 
   public query ({ caller }) func getTaskById(id : Nat) : async TaskResult {
@@ -231,7 +237,7 @@ actor {
     };
   };
 
-  public shared ({ caller }) func updateProfile(name : Text, phone : ?Text, location : Text, isAvailableAsTasker : Bool, upiId : ?Text) : async () {
+  public shared ({ caller }) func updateProfile(name : Text, phone : ?Text, location : Text, isAvailableAsTasker : Bool, upiId : ?Text, aadharOrStudentId : ?Text) : async () {
     if (not isUser(caller)) {
       Runtime.trap("Unauthorized: Only users can update profiles");
     };
@@ -259,6 +265,10 @@ actor {
     switch (upiId) {
       case (null) {};
       case (?uid) { upiIds.add(caller, uid) };
+    };
+    switch (aadharOrStudentId) {
+      case (null) {};
+      case (?aid) { aadharOrStudentIds.add(caller, aid) };
     };
   };
 
@@ -408,7 +418,6 @@ actor {
               let taskerAmt = if (totalAmount > fee) { totalAmount - fee } else { 0 };
               platformFees += fee;
 
-              // Record payment log
               let log : PaymentLog = {
                 id = nextLogId;
                 taskId = task.id;
@@ -421,7 +430,6 @@ actor {
               paymentLogs.add(nextLogId, log);
               nextLogId := nextLogId + 1;
 
-              // Record payout (pending manual payout to tasker)
               let payout : PayoutRecord = {
                 taskId = task.id;
                 taskerId;
@@ -447,11 +455,8 @@ actor {
     if (not isUser(caller)) {
       Runtime.trap("Unauthorized: Only users can view their tasks");
     };
-
     tasks.values().toArray().filter(
-      func(task) {
-        task.customerId == caller;
-      }
+      func(task) { task.customerId == caller }
     );
   };
 
@@ -459,7 +464,6 @@ actor {
     if (not isUser(caller)) {
       Runtime.trap("Unauthorized: Only users can view their tasks");
     };
-
     tasks.values().toArray().filter(
       func(task) {
         switch (task.taskerId) {
@@ -478,25 +482,20 @@ actor {
 
   public query func getAvailableTasks() : async [Task] {
     tasks.values().toArray().filter(
-      func(task) {
-        task.status == #posted;
-      }
+      func(task) { task.status == #posted }
     ).sort(Task.compareByCreatedAt);
   };
 
-  // Admin: get ALL tasks regardless of status
   public query ({ caller }) func getAllTasks() : async [Task] {
     if (caller.isAnonymous()) { return [] };
     tasks.values().toArray();
   };
 
-  // Admin: get ALL user profiles
   public query ({ caller }) func getAllUserProfiles() : async [PublicUserProfile] {
     if (caller.isAnonymous()) { return [] };
     return profiles.values().toArray().map(toPublicProfile);
   };
 
-  // Seed test users for debugging/testing when profiles is empty
   public func seedUsers() : async () {
     if (profiles.size() > 0) { return };
     let p1 = Principal.fromText("2vxsx-fae");
@@ -511,7 +510,6 @@ actor {
     });
   };
 
-  // Admin: cancel any task regardless of status/owner
   public shared ({ caller }) func adminCancelTask(taskId : Nat) : async TaskResult {
     if (not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Only admins can cancel tasks");
@@ -526,19 +524,16 @@ actor {
     };
   };
 
-  // Admin: get all payment logs
   public query ({ caller }) func getPaymentLogs() : async [PaymentLog] {
     if (caller.isAnonymous()) { return [] };
     paymentLogs.values().toArray();
   };
 
-  // Admin: get all payout records
   public query ({ caller }) func getPayoutRecords() : async [PayoutRecord] {
     if (caller.isAnonymous()) { return [] };
     payoutRecords.values().toArray();
   };
 
-  // Admin: mark a payout as paid
   public shared ({ caller }) func markPayoutPaid(taskId : Nat, method : PayoutMethod) : async Bool {
     if (not isUser(caller)) {
       Runtime.trap("Unauthorized");
@@ -562,7 +557,6 @@ actor {
     if (not isUser(caller)) {
       Runtime.trap("Unauthorized: Only users can update tasks");
     };
-
     switch (tasks.get(taskId)) {
       case (null) { Runtime.trap("Task not found") };
       case (?task) {
@@ -590,7 +584,6 @@ actor {
     if (not isUser(caller)) {
       Runtime.trap("Unauthorized: Only users can view wallet balance");
     };
-
     switch (profiles.get(caller)) {
       case (null) { 0 };
       case (?profile) { profile.walletBalance };
@@ -601,7 +594,6 @@ actor {
     if (not isUser(caller)) {
       Runtime.trap("Unauthorized: Only users can view earnings history");
     };
-
     tasks.values().toArray().filter(
       func(task) {
         switch (task.taskerId) {
@@ -616,7 +608,6 @@ actor {
     if (not isUser(caller)) {
       Runtime.trap("Unauthorized: Only users can cancel tasks");
     };
-
     switch (tasks.get(taskId)) {
       case (null) { #err("Task not found") };
       case (?task) {
@@ -637,10 +628,7 @@ actor {
     if (not isUser(caller)) {
       Runtime.trap("Unauthorized: Only users can rate tasks");
     };
-
-    if (stars < 1 or stars > 5) {
-      return false;
-    };
+    if (stars < 1 or stars > 5) { return false };
 
     switch (tasks.get(taskId)) {
       case (null) { false };
@@ -659,11 +647,9 @@ actor {
                 case (?count) { currentCount := count };
                 case (null) { currentCount := 0 };
               };
-
               let oldCount = currentCount;
               currentCount += 1;
               ratingCounts.add(taskerId, currentCount);
-
               switch (profiles.get(taskerId)) {
                 case (null) { return false };
                 case (?profile) {
@@ -700,11 +686,9 @@ actor {
                   case (null) { currentCount := 0 };
                   case (?count) { currentCount := count };
                 };
-
                 let oldCount = currentCount;
                 currentCount += 1;
                 ratingCounts.add(task.customerId, currentCount);
-
                 switch (profiles.get(task.customerId)) {
                   case (null) { return false };
                   case (?profile) {
@@ -734,7 +718,6 @@ actor {
         } else {
           return false;
         };
-
         true;
       };
     };
@@ -762,14 +745,7 @@ actor {
     switch (stripeConfig) {
       case (null) { Runtime.trap("Stripe not configured") };
       case (?config) {
-        await Stripe.createCheckoutSession(
-          config,
-          caller,
-          items,
-          successUrl,
-          cancelUrl,
-          transform
-        );
+        await Stripe.createCheckoutSession(config, caller, items, successUrl, cancelUrl, transform);
       };
     };
   };
@@ -789,7 +765,6 @@ actor {
         cancelledTasks = 0;
       };
     };
-
     let allTasks = tasks.values().toArray();
     {
       totalTasks = tasks.size();
@@ -806,12 +781,11 @@ actor {
     };
   };
 
-  // DEBUG: Count users (profiles) in stable storage
+
   public query func debugUsersCount() : async Nat {
     return profiles.size();
   };
 
-  // DEBUG: Count tasks in stable storage
   public query func debugTasksCount() : async Nat {
     return tasks.size();
   };
