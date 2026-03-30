@@ -243,7 +243,7 @@ export interface backendInterface {
     saveCallerUserProfile(profile: PublicUserProfile): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
-    updateProfile(name: string, phone: string | null, location: string, isAvailableAsTasker: boolean, upiId: string | null): Promise<void>;
+    updateProfile(name: string, phone: string | null, location: string, isAvailableAsTasker: boolean, upiId: string | null, aadharOrStudentId: string | null): Promise<void>;
     updateTask(taskId: bigint, update: TaskUpdateRequest): Promise<void>;
     adminCancelTask(taskId: bigint): Promise<TaskResult>;
     getAllTasks(): Promise<Array<Task>>;
@@ -620,17 +620,17 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async updateProfile(arg0: string, arg1: string | null, arg2: string, arg3: boolean, arg4: string | null): Promise<void> {
+    async updateProfile(arg0: string, arg1: string | null, arg2: string, arg3: boolean, arg4: string | null, arg5: string | null): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor.updateProfile(arg0, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg1), arg2, arg3, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg4));
+                const result = await this.actor.updateProfile(arg0, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg1), arg2, arg3, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg4), to_candid_opt_n25(this._uploadFile, this._downloadFile, arg5));
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.updateProfile(arg0, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg1), arg2, arg3, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg4));
+            const result = await this.actor.updateProfile(arg0, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg1), arg2, arg3, to_candid_opt_n25(this._uploadFile, this._downloadFile, arg4), to_candid_opt_n25(this._uploadFile, this._downloadFile, arg5));
             return result;
         }
     }
