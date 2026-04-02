@@ -227,7 +227,7 @@ export default function ProfilePage() {
                   className="text-sm font-semibold"
                 >
                   <IdCard className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
-                  Aadhar No. / Student ID
+                  Aadharcard Details / Student ID
                   <span className="text-muted-foreground font-normal ml-1">
                     — optional
                   </span>

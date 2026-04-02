@@ -1013,6 +1013,24 @@ function UserProfileDialog({
             <p className="text-xs text-muted-foreground mb-1">Rating</p>
             <StarRating rating={user.rating} />
           </div>
+          {(user.upiId?.[0] || (user as any).upiId) && (
+            <div className="bg-secondary/40 rounded-xl p-3">
+              <p className="text-xs text-muted-foreground mb-1">UPI ID</p>
+              <p className="text-sm font-medium text-green-vivid">
+                {user.upiId?.[0] ?? (user as any).upiId}
+              </p>
+            </div>
+          )}
+          {(user.aadharOrStudentId?.[0] || (user as any).aadharOrStudentId) && (
+            <div className="bg-secondary/40 rounded-xl p-3">
+              <p className="text-xs text-muted-foreground mb-1">
+                Aadharcard Details / Student ID
+              </p>
+              <p className="text-sm font-medium">
+                {user.aadharOrStudentId?.[0] ?? (user as any).aadharOrStudentId}
+              </p>
+            </div>
+          )}
           {userTasks.length > 0 && (
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
@@ -1317,6 +1335,24 @@ function TaskerProfileDialog({
               <StarRating rating={user.rating} />
             </div>
           </div>
+          {(user.upiId?.[0] || (user as any).upiId) && (
+            <div className="bg-secondary/40 rounded-xl p-3">
+              <p className="text-xs text-muted-foreground mb-1">UPI ID</p>
+              <p className="text-sm font-medium text-green-vivid">
+                {user.upiId?.[0] ?? (user as any).upiId}
+              </p>
+            </div>
+          )}
+          {(user.aadharOrStudentId?.[0] || (user as any).aadharOrStudentId) && (
+            <div className="bg-secondary/40 rounded-xl p-3">
+              <p className="text-xs text-muted-foreground mb-1">
+                Aadharcard Details / Student ID
+              </p>
+              <p className="text-sm font-medium">
+                {user.aadharOrStudentId?.[0] ?? (user as any).aadharOrStudentId}
+              </p>
+            </div>
+          )}
           {taskerTasks.length > 0 && (
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
