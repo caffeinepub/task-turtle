@@ -18,6 +18,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import logoImg from "../assets/task-turtle-logo.png";
+import YouTubeSlider from "../components/YouTubeSlider";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 const slider1 = "/assets/generated/slider-1.dim_800x500.jpg";
@@ -562,6 +563,9 @@ export default function LandingPage() {
           </motion.div>
         </div>
       </section>
+
+      {/* ─── YouTube Video Slider ────────────────────────────────────── */}
+      <YouTubeSlider />
 
       {/* ─── Footer ──────────────────────────────────────────────────── */}
       <footer className="border-t border-border py-10">

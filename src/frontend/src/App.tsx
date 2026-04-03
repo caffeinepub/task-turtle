@@ -14,11 +14,12 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Dashboard from "./pages/Dashboard";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
+import PickupDropPage from "./pages/PickupDropPage";
 import ProfilePage from "./pages/ProfilePage";
 import TaskerDashboard from "./pages/TaskerDashboard";
 import WalletPage from "./pages/WalletPage";
 
-// ─── Loading state ────────────────────────────────────────────────────────────
+// ─── Loading state ────────────────────────────────────────────────────────────────────
 
 function PageLoader() {
   return (
@@ -31,7 +32,7 @@ function PageLoader() {
   );
 }
 
-// ─── Auth guard component ─────────────────────────────────────────────────────
+// ─── Auth guard component ─────────────────────────────────────────────────────────────
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { identity, isInitializing } = useInternetIdentity();
@@ -40,14 +41,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// ─── Profile bootstrap — silently registers user on first login ───────────────
+// ─── Profile bootstrap — silently registers user on first login ──────────────────────
 
 function ProfileBootstrap() {
   useEnsureProfile();
   return null;
 }
 
-// ─── App layout wrapper for protected pages ───────────────────────────────────
+// ─── App layout wrapper for protected pages ─────────────────────────────────────────
 
 function AppLayout() {
   return (
@@ -61,7 +62,7 @@ function AppLayout() {
   );
 }
 
-// ─── Root route ───────────────────────────────────────────────────────────────
+// ─── Root route ─────────────────────────────────────────────────────────────────────
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -81,7 +82,7 @@ const rootRoute = createRootRoute({
   ),
 });
 
-// ─── Public routes ────────────────────────────────────────────────────────────
+// ─── Public routes ──────────────────────────────────────────────────────────────────
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -95,7 +96,7 @@ const loginRoute = createRoute({
   component: LoginPage,
 });
 
-// ─── Protected layout route ───────────────────────────────────────────────────
+// ─── Protected layout route ──────────────────────────────────────────────────────────
 
 const protectedLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -137,7 +138,13 @@ const adminRoute = createRoute({
   component: AdminDashboard,
 });
 
-// ─── Router ───────────────────────────────────────────────────────────────────
+const pickupDropRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/pickup-drop",
+  component: PickupDropPage,
+});
+
+// ─── Router ─────────────────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -148,6 +155,7 @@ const routeTree = rootRoute.addChildren([
     walletRoute,
     profileRoute,
     adminRoute,
+    pickupDropRoute,
   ]),
 ]);
 

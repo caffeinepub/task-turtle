@@ -790,4 +790,229 @@ actor {
     return tasks.size();
   };
 
+  // ═══════════════════════════════════════════════════════════
+  // PICKUP-DROP TASK SYSTEM (Completely separate module)
+  // ═══════════════════════════════════════════════════════════
+
+  // --- Types ---
+
+  public type PickupDropTaskStatus = {
+    #open;
+    #accepted;
+    #inProgress;
+    #delivered;
+    #completed;
+    #failed;
+    #cancelled;
+  };
+
+  public type PickupDropTask = {
+    id : Nat;
+    pickupOwnerName : Text;
+    pickupContact : Text;
+    pickupLocation : Text;
+    dropOwnerName : Text;
+    dropContact : Text;
+    dropLocation : Text;
+    productWorth : Nat;
+    taskerFee : Nat;
+    boostFee : Nat;
+    status : PickupDropTaskStatus;
+    posterId : Principal;
+    createdAt : Int;
+  };
+
+  public type PickupDropActiveTask = {
+    taskId : Nat;
+    taskerId : Principal;
+    paymentDone : Bool;
+    status : PickupDropTaskStatus;
+    otpPickup : Nat;
+    otpDelivery : Nat;
+    acceptedAt : Int;
+    completedAt : ?Int;
+  };
+
+  // --- Storage ---
+
+  let pickupDropTasks = Map.empty<Nat, PickupDropTask>();
+  let pickupDropActiveTasks = Map.empty<Nat, PickupDropActiveTask>();
+  var nextPickupDropId = 1;
+
+  // --- Functions ---
+
+  public shared ({ caller }) func createPickupDropTask(
+    pickupOwnerName : Text,
+    pickupContact : Text,
+    pickupLocation : Text,
+    dropOwnerName : Text,
+    dropContact : Text,
+    dropLocation : Text,
+    productWorth : Nat,
+    taskerFee : Nat,
+    boostFee : Nat,
+  ) : async Nat {
+    if (not isUser(caller)) {
+      Runtime.trap("Unauthorized: Only users can create pickup-drop tasks");
+    };
+    let pdTask : PickupDropTask = {
+      id = nextPickupDropId;
+      pickupOwnerName;
+      pickupContact;
+      pickupLocation;
+      dropOwnerName;
+      dropContact;
+      dropLocation;
+      productWorth;
+      taskerFee;
+      boostFee;
+      status = #open;
+      posterId = caller;
+      createdAt = Time.now();
+    };
+    pickupDropTasks.add(nextPickupDropId, pdTask);
+    nextPickupDropId := nextPickupDropId + 1;
+    pdTask.id;
+  };
+
+  public query func getAvailablePickupDropTasks() : async [PickupDropTask] {
+    pickupDropTasks.values().toArray().filter(
+      func(t) { t.status == #open }
+    );
+  };
+
+  public query ({ caller }) func getMyPostedPickupDropTasks() : async [PickupDropTask] {
+    if (not isUser(caller)) {
+      Runtime.trap("Unauthorized");
+    };
+    pickupDropTasks.values().toArray().filter(
+      func(t) { t.posterId == caller }
+    );
+  };
+
+  public query ({ caller }) func getMyActivePickupDropTasks() : async [(PickupDropTask, PickupDropActiveTask)] {
+    if (not isUser(caller)) {
+      Runtime.trap("Unauthorized");
+    };
+    let myActive = pickupDropActiveTasks.values().toArray().filter(
+      func(a) { a.taskerId == caller }
+    );
+    myActive.filterMap(func(active) : ?(PickupDropTask, PickupDropActiveTask) {
+      switch (pickupDropTasks.get(active.taskId)) {
+        case (null) { null };
+        case (?task) { ?(task, active) };
+      };
+    });
+  };
+
+  public shared ({ caller }) func acceptPickupDropTask(taskId : Nat) : async Bool {
+    if (not isUser(caller)) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (pickupDropTasks.get(taskId)) {
+      case (null) { false };
+      case (?task) {
+        if (task.status != #open) { return false };
+        if (task.posterId == caller) { return false };
+
+        let seed = Int.abs(Time.now()) + taskId * 777_773;
+        let otpPickup = (seed % 900_000) + 100_000;
+        let otpDelivery = ((seed * 31337) % 900_000) + 100_000;
+
+        let updatedTask = { task with status = #accepted };
+        pickupDropTasks.add(taskId, updatedTask);
+
+        let active : PickupDropActiveTask = {
+          taskId;
+          taskerId = caller;
+          paymentDone = true;
+          status = #accepted;
+          otpPickup;
+          otpDelivery;
+          acceptedAt = Time.now();
+          completedAt = null;
+        };
+        pickupDropActiveTasks.add(taskId, active);
+        true;
+      };
+    };
+  };
+
+  public shared ({ caller }) func markPickupDropInProgress(taskId : Nat) : async Bool {
+    if (not isUser(caller)) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (pickupDropActiveTasks.get(taskId)) {
+      case (null) { false };
+      case (?active) {
+        if (active.taskerId != caller) { return false };
+        if (active.status != #accepted) { return false };
+        let updatedActive = { active with status = #inProgress };
+        pickupDropActiveTasks.add(taskId, updatedActive);
+        switch (pickupDropTasks.get(taskId)) {
+          case (null) {};
+          case (?task) {
+            pickupDropTasks.add(taskId, { task with status = #inProgress });
+          };
+        };
+        true;
+      };
+    };
+  };
+
+  public shared ({ caller }) func markPickupDropDelivered(taskId : Nat) : async Bool {
+    if (not isUser(caller)) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (pickupDropActiveTasks.get(taskId)) {
+      case (null) { false };
+      case (?active) {
+        if (active.taskerId != caller) { return false };
+        if (active.status != #inProgress) { return false };
+        let updatedActive = { active with status = #delivered };
+        pickupDropActiveTasks.add(taskId, updatedActive);
+        switch (pickupDropTasks.get(taskId)) {
+          case (null) {};
+          case (?task) {
+            pickupDropTasks.add(taskId, { task with status = #delivered });
+          };
+        };
+        true;
+      };
+    };
+  };
+
+  public shared ({ caller }) func verifyPickupDropOtp(taskId : Nat, otp : Nat) : async Bool {
+    if (not isUser(caller)) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (pickupDropActiveTasks.get(taskId)) {
+      case (null) { false };
+      case (?active) {
+        if (active.taskerId != caller) { return false };
+        if (active.status != #delivered) { return false };
+        if (active.otpDelivery != otp) { return false };
+
+        let updatedActive = { active with status = #completed; completedAt = ?Time.now() };
+        pickupDropActiveTasks.add(taskId, updatedActive);
+        switch (pickupDropTasks.get(taskId)) {
+          case (null) {};
+          case (?task) {
+            pickupDropTasks.add(taskId, { task with status = #completed });
+          };
+        };
+        true;
+      };
+    };
+  };
+
+  public query func getPickupDropTaskById(taskId : Nat) : async ?PickupDropTask {
+    pickupDropTasks.get(taskId);
+  };
+
+  public query ({ caller }) func getPickupDropActiveTaskById(taskId : Nat) : async ?PickupDropActiveTask {
+    pickupDropActiveTasks.get(taskId);
+  };
+
 };
+

@@ -14,19 +14,27 @@ import {
   Package,
   Phone,
   RefreshCw,
+  ShieldCheck,
   Star,
   Store,
   Trophy,
+  Truck,
   Wallet,
   Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { TaskStatus } from "../backend.d";
-import type { Task } from "../backend.d";
+import type { PickupDropActiveTask, PickupDropTask, Task } from "../backend.d";
 import { StarRating } from "../components/StarRating";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { useNewTaskDetector } from "../hooks/useNewTaskDetector";
+import {
+  useMarkPickupDropDelivered,
+  useMarkPickupDropInProgress,
+  useMyActivePickupDropTasks,
+  useVerifyPickupDropOtp,
+} from "../hooks/usePickupDropQueries";
 import {
   useAcceptTask,
   useAvailableTasks,
@@ -530,6 +538,192 @@ function CompletedTaskCard({ task, index }: { task: Task; index: number }) {
   );
 }
 
+// ─── Pickup-Drop Active Task Card ────────────────────────────────────────────
+
+function PdActiveCard({
+  taskTuple,
+  index,
+}: { taskTuple: [PickupDropTask, PickupDropActiveTask]; index: number }) {
+  const [task, activeTask] = taskTuple;
+  const markInProgress = useMarkPickupDropInProgress();
+  const markDelivered = useMarkPickupDropDelivered();
+  const verifyOtp = useVerifyPickupDropOtp();
+  const [otpInput, setOtpInput] = useState("");
+
+  const totalEarning = task.taskerFee + task.boostFee;
+  const platformCut = (totalEarning * 15n) / 100n;
+  const netEarning = totalEarning - platformCut;
+  const statusKind = activeTask.status.__kind__;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.06 }}
+      data-ocid={`tasker.pd_active_task.${index + 1}`}
+      className="glass-card rounded-2xl p-5 border-blue-400/20 hover:border-blue-400/30 transition-all space-y-4"
+    >
+      <div className="flex items-center justify-between">
+        <Badge className="bg-blue-500/15 text-blue-400 border-blue-400/30 text-xs font-semibold">
+          🔵 Pickup-Drop
+        </Badge>
+        <Badge
+          className={`text-xs font-semibold border ${
+            statusKind === "accepted"
+              ? "bg-orange-400/15 text-orange-400 border-orange-400/30"
+              : statusKind === "inProgress"
+                ? "bg-amber-400/15 text-amber-400 border-amber-400/30"
+                : statusKind === "delivered"
+                  ? "bg-purple-400/15 text-purple-400 border-purple-400/30"
+                  : "bg-green-surface text-green-vivid border-green-vivid/30"
+          }`}
+        >
+          {statusKind === "accepted"
+            ? "Accepted"
+            : statusKind === "inProgress"
+              ? "In Progress"
+              : statusKind === "delivered"
+                ? "Delivered"
+                : "Completed"}
+        </Badge>
+      </div>
+
+      {/* Earning & Deposit */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-green-surface/15 border border-green-vivid/15 rounded-xl p-3">
+          <p className="text-xs text-muted-foreground">Your Earning</p>
+          <p className="font-display font-black text-lg text-green-vivid">
+            {formatINR(netEarning)}
+          </p>
+        </div>
+        <div className="bg-amber-400/8 border border-amber-400/20 rounded-xl p-3">
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-amber-400" /> Deposit
+          </p>
+          <p className="font-bold text-amber-400">
+            {formatINR(task.productWorth)}
+          </p>
+        </div>
+      </div>
+
+      {/* Route */}
+      <div className="grid grid-cols-1 gap-3">
+        <div className="bg-secondary/50 rounded-xl p-3">
+          <p className="text-xs text-muted-foreground font-medium mb-1 flex items-center gap-1">
+            <Package className="w-3 h-3 text-blue-400" /> Pickup
+          </p>
+          <p className="text-sm font-semibold">{task.pickupOwnerName}</p>
+          <a
+            href={`tel:${task.pickupContact}`}
+            className="text-xs text-blue-400 hover:underline"
+          >
+            {task.pickupContact}
+          </a>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {task.pickupLocation}
+          </p>
+        </div>
+        <div className="bg-secondary/50 rounded-xl p-3">
+          <p className="text-xs text-muted-foreground font-medium mb-1 flex items-center gap-1">
+            <MapPin className="w-3 h-3 text-green-vivid" /> Drop
+          </p>
+          <p className="text-sm font-semibold">{task.dropOwnerName}</p>
+          <a
+            href={`tel:${task.dropContact}`}
+            className="text-xs text-blue-400 hover:underline"
+          >
+            {task.dropContact}
+          </a>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {task.dropLocation}
+          </p>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      {statusKind === "accepted" && (
+        <Button
+          size="sm"
+          onClick={() => markInProgress.mutate(task.id)}
+          disabled={markInProgress.isPending}
+          className="w-full bg-orange-400/15 text-orange-400 hover:bg-orange-400/25 border border-orange-400/30 font-semibold rounded-xl"
+        >
+          {markInProgress.isPending ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <>
+              <Package className="w-4 h-4 mr-2" />
+              Mark Picked Up & In Progress
+            </>
+          )}
+        </Button>
+      )}
+
+      {statusKind === "inProgress" && (
+        <Button
+          size="sm"
+          onClick={() => markDelivered.mutate(task.id)}
+          disabled={markDelivered.isPending}
+          className="w-full bg-purple-400/15 text-purple-400 hover:bg-purple-400/25 border border-purple-400/30 font-semibold rounded-xl"
+        >
+          {markDelivered.isPending ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <>
+              <Truck className="w-4 h-4 mr-2" />
+              Mark as Delivered
+            </>
+          )}
+        </Button>
+      )}
+
+      {statusKind === "delivered" && (
+        <div className="space-y-3 bg-green-surface/20 rounded-xl p-4 border border-green-vivid/15">
+          <div className="flex items-center gap-2">
+            <KeyRound className="w-4 h-4 text-green-vivid" />
+            <p className="text-sm font-semibold text-green-vivid">
+              Enter Delivery OTP to Complete
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="6-digit OTP"
+              value={otpInput}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+                setOtpInput(val);
+              }}
+              maxLength={6}
+              className="bg-background border-border focus:border-green-vivid/50 rounded-xl h-11 font-mono text-center tracking-[0.3em] text-xl"
+            />
+            <Button
+              onClick={() => {
+                if (otpInput.length !== 6) return;
+                const parsed = Number.parseInt(otpInput, 10);
+                if (!Number.isNaN(parsed)) {
+                  verifyOtp.mutate({ taskId: task.id, otp: BigInt(parsed) });
+                  setOtpInput("");
+                }
+              }}
+              disabled={verifyOtp.isPending || otpInput.length !== 6}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-green-sm rounded-xl px-5 flex-shrink-0"
+            >
+              {verifyOtp.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Verify"
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 export default function TaskerDashboard() {
   const { data: profile } = useProfile();
   const {
@@ -544,6 +738,11 @@ export default function TaskerDashboard() {
   } = useMyAcceptedTasks();
   const { data: completedTasks = [], isLoading: loadingCompleted } =
     useEarningsHistory();
+  const {
+    data: pdActiveTasks = [],
+    isLoading: loadingPdActive,
+    refetch: refetchPdActive,
+  } = useMyActivePickupDropTasks();
 
   // Rapido-style sound notification when new tasks arrive
   useNewTaskDetector(availableTasks, profile?.isAvailableAsTasker ?? false);
@@ -551,6 +750,7 @@ export default function TaskerDashboard() {
   const refetchAll = () => {
     refetchAvailable();
     refetchActive();
+    refetchPdActive();
   };
 
   return (
@@ -715,6 +915,64 @@ export default function TaskerDashboard() {
                 <CompletedTaskCard
                   key={String(task.id)}
                   task={task}
+                  index={i}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+      </div>
+
+      {/* ─── Pickup-Drop Active Tasks ──────────────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-blue-500/15 rounded-xl flex items-center justify-center">
+              <Truck className="w-4 h-4 text-blue-400" />
+            </div>
+            <h2 className="font-display font-bold text-xl">
+              My Pickup-Drop Tasks
+              {pdActiveTasks.length > 0 && (
+                <Badge className="ml-2 bg-blue-500/15 text-blue-400 border-0 text-xs">
+                  {pdActiveTasks.length}
+                </Badge>
+              )}
+            </h2>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => refetchPdActive()}
+            className="text-muted-foreground hover:text-blue-400 gap-2"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+
+        {loadingPdActive ? (
+          <div className="grid sm:grid-cols-2 gap-4">
+            {[1, 2].map((i) => (
+              <Skeleton key={i} className="h-56 rounded-2xl bg-secondary" />
+            ))}
+          </div>
+        ) : pdActiveTasks.length === 0 ? (
+          <div
+            data-ocid="tasker.pd_active_tasks.empty_state"
+            className="glass-card rounded-2xl p-10 text-center border-border"
+          >
+            <Truck className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+            <h3 className="font-semibold mb-1">No active pickup-drop tasks</h3>
+            <p className="text-muted-foreground text-sm">
+              Accept a pickup-drop task from Find Tasks to see it here
+            </p>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-4">
+            <AnimatePresence>
+              {pdActiveTasks.map((taskTuple, i) => (
+                <PdActiveCard
+                  key={String(taskTuple[0].id)}
+                  taskTuple={taskTuple}
                   index={i}
                 />
               ))}

@@ -149,6 +149,45 @@ export enum UserRole {
     user = "user",
     guest = "guest"
 }
+
+// ─── Pickup-Drop Types ────────────────────────────────────────────────────────
+
+export type PickupDropTaskStatus =
+  | { __kind__: "open" }
+  | { __kind__: "accepted" }
+  | { __kind__: "inProgress" }
+  | { __kind__: "delivered" }
+  | { __kind__: "completed" }
+  | { __kind__: "failed" }
+  | { __kind__: "cancelled" };
+
+export interface PickupDropTask {
+  id: bigint;
+  pickupOwnerName: string;
+  pickupContact: string;
+  pickupLocation: string;
+  dropOwnerName: string;
+  dropContact: string;
+  dropLocation: string;
+  productWorth: bigint;
+  taskerFee: bigint;
+  boostFee: bigint;
+  status: PickupDropTaskStatus;
+  posterId: Principal;
+  createdAt: bigint;
+}
+
+export interface PickupDropActiveTask {
+  taskId: bigint;
+  taskerId: Principal;
+  paymentDone: boolean;
+  status: PickupDropTaskStatus;
+  otpPickup: bigint;
+  otpDelivery: bigint;
+  acceptedAt: bigint;
+  completedAt?: bigint;
+}
+
 export interface backendInterface {
     acceptTask(taskId: bigint): Promise<TaskResult>;
     adminCancelTask(taskId: bigint): Promise<TaskResult>;
@@ -186,4 +225,15 @@ export interface backendInterface {
     updateProfile(name: string, phone: string | null, location: string, isAvailableAsTasker: boolean, upiId: string | null, aadharOrStudentId: string | null): Promise<void>;
     updateTask(taskId: bigint, update: TaskUpdateRequest): Promise<void>;
     verifyOtp(taskId: bigint, otp: bigint): Promise<boolean>;
+    // Pickup-Drop methods
+    createPickupDropTask(pickupOwnerName: string, pickupContact: string, pickupLocation: string, dropOwnerName: string, dropContact: string, dropLocation: string, productWorth: bigint, taskerFee: bigint, boostFee: bigint): Promise<bigint>;
+    getAvailablePickupDropTasks(): Promise<Array<PickupDropTask>>;
+    getMyPostedPickupDropTasks(): Promise<Array<PickupDropTask>>;
+    getMyActivePickupDropTasks(): Promise<Array<[PickupDropTask, PickupDropActiveTask]>>;
+    acceptPickupDropTask(taskId: bigint): Promise<boolean>;
+    markPickupDropInProgress(taskId: bigint): Promise<boolean>;
+    markPickupDropDelivered(taskId: bigint): Promise<boolean>;
+    verifyPickupDropOtp(taskId: bigint, otp: bigint): Promise<boolean>;
+    getPickupDropTaskById(taskId: bigint): Promise<PickupDropTask | null>;
+    getPickupDropActiveTaskById(taskId: bigint): Promise<PickupDropActiveTask | null>;
 }

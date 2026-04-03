@@ -5,6 +5,7 @@ import {
   LogOut,
   Menu,
   ShieldCheck,
+  Truck,
   User,
   Wallet,
   X,
@@ -24,6 +25,12 @@ const navLinks = [
     ocid: "nav.dashboard_link",
   },
   { href: "/tasker", label: "Tasker", icon: Zap, ocid: "nav.tasker_link" },
+  {
+    href: "/pickup-drop",
+    label: "Pickup-Drop",
+    icon: Truck,
+    ocid: "nav.pickup_drop_link",
+  },
   { href: "/wallet", label: "Wallet", icon: Wallet, ocid: "nav.wallet_link" },
   { href: "/profile", label: "Profile", icon: User, ocid: "nav.profile_link" },
 ] as const;
@@ -58,6 +65,7 @@ export default function Navbar() {
           {navLinks.map((link) => {
             const Icon = link.icon;
             const isActive = currentPath === link.href;
+            const isBlue = link.href === "/pickup-drop";
             return (
               <Link
                 key={link.href}
@@ -67,7 +75,9 @@ export default function Navbar() {
                   relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
                   ${
                     isActive
-                      ? "bg-green-surface text-green-vivid shadow-green-sm"
+                      ? isBlue
+                        ? "bg-blue-500/15 text-blue-400 shadow-[0_2px_8px_oklch(0.6_0.2_240/0.15)]"
+                        : "bg-green-surface text-green-vivid shadow-green-sm"
                       : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                   }
                 `}
@@ -77,7 +87,9 @@ export default function Navbar() {
                 {isActive && (
                   <motion.div
                     layoutId="navbar-indicator"
-                    className="absolute inset-0 rounded-lg bg-green-surface -z-10"
+                    className={`absolute inset-0 rounded-lg -z-10 ${
+                      isBlue ? "bg-blue-500/15" : "bg-green-surface"
+                    }`}
                     transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
                   />
                 )}
@@ -136,6 +148,7 @@ export default function Navbar() {
           {navLinks.map((link) => {
             const Icon = link.icon;
             const isActive = currentPath === link.href;
+            const isBlue = link.href === "/pickup-drop";
             return (
               <Link
                 key={link.href}
@@ -146,7 +159,9 @@ export default function Navbar() {
                   flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all
                   ${
                     isActive
-                      ? "bg-green-surface text-green-vivid"
+                      ? isBlue
+                        ? "bg-blue-500/15 text-blue-400"
+                        : "bg-green-surface text-green-vivid"
                       : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                   }
                 `}

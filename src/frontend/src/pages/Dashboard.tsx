@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
   ClipboardList,
   ExternalLink,
@@ -17,10 +18,13 @@ import {
   Loader2,
   LogIn,
   MapPin,
+  Package,
   Phone,
   PlusCircle,
   RefreshCw,
+  ShieldCheck,
   Store,
+  Truck,
   X,
   Zap,
 } from "lucide-react";
@@ -29,11 +33,14 @@ import { useState } from "react";
 import { TaskStatus } from "../backend.d";
 import type { Task } from "../backend.d";
 import CashfreePaymentModal from "../components/CashfreePaymentModal";
+import CategorySelector from "../components/CategorySelector";
 import { StarRating } from "../components/StarRating";
 import { TaskProgressTimeline } from "../components/TaskProgressTimeline";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import { useAvailablePickupDropTasks } from "../hooks/usePickupDropQueries";
+import { useMyPostedPickupDropTasks } from "../hooks/usePickupDropQueries";
 import {
   useAcceptTask,
   useAvailableTasks,
@@ -428,7 +435,7 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
           ) : (
             <>
               <PlusCircle className="w-5 h-5 mr-2" />
-              Pay & Post Task (Escrow)
+              Pay &amp; Post Task (Escrow)
             </>
           )}
         </Button>
@@ -718,8 +725,72 @@ function FindTaskCard({ task, index }: { task: Task; index: number }) {
   );
 }
 
+// ─── Mini Pickup-Drop Task Card (for Find Tasks tab preview) ─────────────────────
+
+function MiniPickupDropCard({
+  task,
+  index,
+}: {
+  task: import("../backend.d").PickupDropTask;
+  index: number;
+}) {
+  const navigate = useNavigate();
+  const totalEarning = task.taskerFee + task.boostFee;
+  const platformCut = (totalEarning * 15n) / 100n;
+  const netEarning = totalEarning - platformCut;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.05 }}
+      data-ocid={`dashboard.pd_task_item.${index + 1}`}
+      className="glass-card rounded-2xl p-4 border-border hover:border-blue-400/30 transition-all space-y-3"
+    >
+      <div className="flex items-center justify-between">
+        <Badge className="bg-blue-500/15 text-blue-400 border-blue-400/30 text-xs font-semibold">
+          🔵 Pickup-Drop
+        </Badge>
+        <span className="font-display font-black text-lg text-green-vivid">
+          Earn {formatINR(netEarning)}
+        </span>
+      </div>
+      <div className="bg-amber-400/8 border border-amber-400/20 rounded-lg p-2 flex items-center justify-between">
+        <span className="text-xs text-amber-400 flex items-center gap-1">
+          <ShieldCheck className="w-3 h-3" /> Security Deposit
+        </span>
+        <span className="text-sm font-bold text-amber-400">
+          {formatINR(task.productWorth)}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="bg-secondary/50 rounded-lg p-2">
+          <p className="text-muted-foreground">Pickup</p>
+          <p className="font-medium truncate">{task.pickupLocation}</p>
+        </div>
+        <div className="bg-secondary/50 rounded-lg p-2">
+          <p className="text-muted-foreground">Drop</p>
+          <p className="font-medium truncate">{task.dropLocation}</p>
+        </div>
+      </div>
+      <Button
+        size="sm"
+        onClick={() => navigate({ to: "/pickup-drop" })}
+        className="w-full bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl text-xs"
+      >
+        <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+        Accept in Pickup-Drop
+      </Button>
+    </motion.div>
+  );
+}
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("my-tasks");
+  const [showCategorySelector, setShowCategorySelector] = useState(true);
+  const [findTaskCategory, setFindTaskCategory] = useState<
+    "daily" | "pickup-drop"
+  >("daily");
   const {
     data: tasks = [],
     isLoading,
@@ -730,6 +801,9 @@ export default function Dashboard() {
     isLoading: loadingAvailable,
     refetch: refetchAvailable,
   } = useAvailableTasks();
+  const { data: pdTasks = [], isLoading: loadingPdTasks } =
+    useAvailablePickupDropTasks();
+  const { data: myPostedPdTasks = [] } = useMyPostedPickupDropTasks();
   const navigate = useNavigate();
 
   const switchToMyTasks = () => setActiveTab("my-tasks");
@@ -788,8 +862,9 @@ export default function Dashboard() {
         </TabsList>
 
         <TabsContent value="my-tasks">
+          {/* Daily Tasks */}
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-lg">Your Posted Tasks</h2>
+            <h2 className="font-semibold text-lg">🟢 My Daily Tasks</h2>
             <Button
               variant="ghost"
               size="sm"
@@ -812,7 +887,7 @@ export default function Dashboard() {
               className="glass-card rounded-2xl p-12 text-center border-border"
             >
               <div className="text-5xl mb-4">📋</div>
-              <h3 className="font-semibold text-lg mb-2">No tasks yet</h3>
+              <h3 className="font-semibold text-lg mb-2">No daily tasks yet</h3>
               <p className="text-muted-foreground text-sm mb-5">
                 Post your first task and get it done by a nearby tasker
               </p>
@@ -831,90 +906,292 @@ export default function Dashboard() {
               ))}
             </div>
           )}
+
+          {/* My Pickup-Drop Tasks */}
+          <div className="mt-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-lg flex items-center gap-2">
+                🔵 My Pickup-Drop Tasks
+                {myPostedPdTasks.length > 0 && (
+                  <Badge className="bg-blue-500/15 text-blue-400 border-0 text-xs">
+                    {myPostedPdTasks.length}
+                  </Badge>
+                )}
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate({ to: "/pickup-drop" })}
+                className="text-muted-foreground hover:text-blue-400 gap-1 text-xs"
+              >
+                View All
+                <ExternalLink className="w-3 h-3" />
+              </Button>
+            </div>
+            {myPostedPdTasks.length === 0 ? (
+              <div
+                data-ocid="dashboard.pd_task.empty_state"
+                className="glass-card rounded-2xl p-8 text-center border-border"
+              >
+                <Truck className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  No pickup-drop tasks posted yet.{" "}
+                  <button
+                    type="button"
+                    onClick={() => navigate({ to: "/pickup-drop" })}
+                    className="text-blue-400 hover:underline font-semibold"
+                  >
+                    Post one
+                  </button>
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {myPostedPdTasks.slice(0, 3).map((task, i) => (
+                  <div
+                    key={String(task.id)}
+                    data-ocid={`dashboard.pd_task_item.${i + 1}`}
+                    className="glass-card rounded-xl p-4 border-border flex items-center justify-between"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge className="bg-blue-500/15 text-blue-400 border-blue-400/30 text-xs">
+                          Pickup-Drop
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {task.pickupLocation} → {task.dropLocation}
+                      </p>
+                    </div>
+                    <span className="font-bold text-amber-400 text-sm ml-3">
+                      {formatINR(task.productWorth)}
+                    </span>
+                  </div>
+                ))}
+                {myPostedPdTasks.length > 3 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate({ to: "/pickup-drop" })}
+                    className="w-full text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-xl"
+                  >
+                    View all {myPostedPdTasks.length} tasks
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="post-task">
-          <Card className="bg-card border-border rounded-3xl shadow-card">
-            <CardHeader className="pb-2">
-              <CardTitle className="font-display font-bold text-xl">
-                Post a New Task
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Pay via Cashfree escrow — funds released only after OTP
-                verification
-              </p>
-            </CardHeader>
-            <CardContent>
-              <PostTaskForm onSuccess={switchToMyTasks} />
-            </CardContent>
-          </Card>
+          {showCategorySelector ? (
+            <CategorySelector
+              onSelectDaily={() => setShowCategorySelector(false)}
+              onSelectPickupDrop={() => navigate({ to: "/pickup-drop" })}
+            />
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                data-ocid="dashboard.post_task.back_button"
+                onClick={() => setShowCategorySelector(true)}
+                className="mb-4 text-muted-foreground hover:text-foreground gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back
+              </Button>
+              <Card className="bg-card border-border rounded-3xl shadow-card">
+                <CardHeader className="pb-2">
+                  <CardTitle className="font-display font-bold text-xl">
+                    Post a New Daily Task
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Pay via Cashfree escrow — funds released only after OTP
+                    verification
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <PostTaskForm
+                    onSuccess={() => {
+                      switchToMyTasks();
+                      setShowCategorySelector(true);
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="find-tasks">
-          <div className="flex items-start gap-3 bg-green-surface/30 border border-green-vivid/20 rounded-2xl p-4 mb-6">
-            <Zap className="w-5 h-5 text-green-vivid flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground">
-                Earn money by completing tasks near you
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Accept tasks posted by others. Manage accepted tasks in{" "}
-                <button
-                  type="button"
-                  onClick={() => navigate({ to: "/tasker" })}
-                  className="text-green-vivid hover:underline font-semibold inline-flex items-center gap-0.5"
+          {/* Category sub-tabs */}
+          <div className="flex gap-2 mb-5">
+            <button
+              type="button"
+              data-ocid="dashboard.find_tasks.daily_tab"
+              onClick={() => setFindTaskCategory("daily")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                findTaskCategory === "daily"
+                  ? "bg-green-surface text-green-vivid border-green-vivid/30 shadow-green-sm"
+                  : "bg-secondary text-muted-foreground border-border hover:border-green-vivid/20"
+              }`}
+            >
+              🟢 Daily Tasks
+              {availableTasks.length > 0 && (
+                <Badge className="bg-green-vivid/20 text-green-vivid border-0 text-xs px-1.5">
+                  {availableTasks.length}
+                </Badge>
+              )}
+            </button>
+            <button
+              type="button"
+              data-ocid="dashboard.find_tasks.pickup_drop_tab"
+              onClick={() => setFindTaskCategory("pickup-drop")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                findTaskCategory === "pickup-drop"
+                  ? "bg-blue-500/15 text-blue-400 border-blue-400/30 shadow-[0_2px_8px_oklch(0.6_0.2_240/0.15)]"
+                  : "bg-secondary text-muted-foreground border-border hover:border-blue-400/20"
+              }`}
+            >
+              🔵 Pickup-Drop
+              {pdTasks.length > 0 && (
+                <Badge className="bg-blue-500/20 text-blue-400 border-0 text-xs px-1.5">
+                  {pdTasks.length}
+                </Badge>
+              )}
+            </button>
+          </div>
+
+          {findTaskCategory === "daily" ? (
+            <>
+              <div className="flex items-start gap-3 bg-green-surface/30 border border-green-vivid/20 rounded-2xl p-4 mb-6">
+                <Zap className="w-5 h-5 text-green-vivid flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    Earn money by completing tasks near you
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Accept tasks posted by others. Manage accepted tasks in{" "}
+                    <button
+                      type="button"
+                      onClick={() => navigate({ to: "/tasker" })}
+                      className="text-green-vivid hover:underline font-semibold inline-flex items-center gap-0.5"
+                    >
+                      Tasker Hub
+                      <ExternalLink className="w-3 h-3" />
+                    </button>
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-lg">Available Daily Tasks</h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => refetchAvailable()}
+                  className="text-muted-foreground hover:text-green-vivid gap-2"
                 >
-                  Tasker Hub
-                  <ExternalLink className="w-3 h-3" />
-                </button>
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-lg">Available Tasks Near You</h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => refetchAvailable()}
-              className="text-muted-foreground hover:text-green-vivid gap-2"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Refresh
-            </Button>
-          </div>
-          {loadingAvailable ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-48 rounded-2xl bg-secondary" />
-              ))}
-            </div>
-          ) : availableTasks.length === 0 ? (
-            <div
-              data-ocid="dashboard.find_tasks.empty_state"
-              className="glass-card rounded-2xl p-12 text-center border-border"
-            >
-              <div className="text-5xl mb-4">🔍</div>
-              <h3 className="font-semibold text-lg mb-2">No tasks available</h3>
-              <p className="text-muted-foreground text-sm mb-5">
-                No tasks are posted right now. Check back soon — tasks refresh
-                every 15 seconds.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetchAvailable()}
-                className="border-border hover:border-green-vivid/40 hover:text-green-vivid rounded-xl gap-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Refresh now
-              </Button>
-            </div>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Refresh
+                </Button>
+              </div>
+              {loadingAvailable ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton
+                      key={i}
+                      className="h-48 rounded-2xl bg-secondary"
+                    />
+                  ))}
+                </div>
+              ) : availableTasks.length === 0 ? (
+                <div
+                  data-ocid="dashboard.find_tasks.empty_state"
+                  className="glass-card rounded-2xl p-12 text-center border-border"
+                >
+                  <div className="text-5xl mb-4">🔍</div>
+                  <h3 className="font-semibold text-lg mb-2">
+                    No daily tasks available
+                  </h3>
+                  <p className="text-muted-foreground text-sm mb-5">
+                    No tasks are posted right now. Check back soon.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refetchAvailable()}
+                    className="border-border hover:border-green-vivid/40 hover:text-green-vivid rounded-xl gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Refresh now
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {availableTasks.map((task, i) => (
+                    <FindTaskCard key={String(task.id)} task={task} index={i} />
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
-            <div className="space-y-4">
-              {availableTasks.map((task, i) => (
-                <FindTaskCard key={String(task.id)} task={task} index={i} />
-              ))}
-            </div>
+            /* Pickup-Drop tasks */
+            <>
+              <div className="flex items-start gap-3 bg-blue-500/10 border border-blue-400/20 rounded-2xl p-4 mb-6">
+                <Truck className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    Secure deposit-based delivery tasks
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Pay security deposit to accept. Earn after OTP-verified
+                    delivery.{" "}
+                    <button
+                      type="button"
+                      onClick={() => navigate({ to: "/pickup-drop" })}
+                      className="text-blue-400 hover:underline font-semibold inline-flex items-center gap-0.5"
+                    >
+                      Pickup-Drop Hub
+                      <ExternalLink className="w-3 h-3" />
+                    </button>
+                  </p>
+                </div>
+              </div>
+              {loadingPdTasks ? (
+                <div className="space-y-4">
+                  {[1, 2].map((i) => (
+                    <Skeleton
+                      key={i}
+                      className="h-52 rounded-2xl bg-secondary"
+                    />
+                  ))}
+                </div>
+              ) : pdTasks.length === 0 ? (
+                <div
+                  data-ocid="dashboard.find_pd_tasks.empty_state"
+                  className="glass-card rounded-2xl p-12 text-center border-border"
+                >
+                  <Truck className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="font-semibold text-lg mb-2">
+                    No pickup-drop tasks
+                  </h3>
+                  <p className="text-muted-foreground text-sm">
+                    No pickup-drop tasks available right now.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pdTasks.map((task, i) => (
+                    <MiniPickupDropCard
+                      key={String(task.id)}
+                      task={task}
+                      index={i}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
       </Tabs>
