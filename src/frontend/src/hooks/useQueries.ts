@@ -802,3 +802,48 @@ export function useAdminMarkPayoutPaid() {
     },
   });
 }
+
+export function useAdminAllPickupDropTasks() {
+  const { actor, isFetching } = useActor();
+  const { identity } = useInternetIdentity();
+  const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
+  return useQuery<any[]>({
+    queryKey: ["admin-pickup-drop-tasks"],
+    queryFn: async () => {
+      if (!actor || !isAuthenticated) return [];
+      try {
+        const result = await (actor as any).getAllPickupDropTasks();
+        console.log("[Admin] getAllPickupDropTasks:", result);
+        return Array.isArray(result) ? result : [];
+      } catch (e) {
+        console.error("[Admin] getAllPickupDropTasks error:", e);
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching && isAuthenticated,
+    refetchInterval: 5000,
+    staleTime: 3000,
+  });
+}
+
+export function useAdminCancelPickupDropTask() {
+  const { actor } = useActor();
+  const { identity } = useInternetIdentity();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (taskId: bigint) => {
+      checkAuthenticated(identity);
+      if (!actor) throw new Error("Not connected");
+      const result = await (actor as any).adminCancelPickupDropTask(taskId);
+      if (!result) throw new Error("Failed to cancel task");
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-pickup-drop-tasks"] });
+      toast.success("Pickup-Drop task cancelled");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to cancel task");
+    },
+  });
+}

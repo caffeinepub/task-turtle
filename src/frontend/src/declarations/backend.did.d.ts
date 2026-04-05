@@ -118,6 +118,43 @@ export interface PayoutRecord {
   'createdDate' : bigint,
   'paidDate' : [] | [bigint],
 }
+
+export type PickupDropTaskStatus =
+  | { 'open' : null }
+  | { 'accepted' : null }
+  | { 'inProgress' : null }
+  | { 'delivered' : null }
+  | { 'completed' : null }
+  | { 'failed' : null }
+  | { 'cancelled' : null };
+
+export interface PickupDropTask {
+  'id' : bigint,
+  'pickupOwnerName' : string,
+  'pickupContact' : string,
+  'pickupLocation' : string,
+  'dropOwnerName' : string,
+  'dropContact' : string,
+  'dropLocation' : string,
+  'productWorth' : bigint,
+  'taskerFee' : bigint,
+  'boostFee' : bigint,
+  'status' : PickupDropTaskStatus,
+  'posterId' : Principal,
+  'createdAt' : bigint,
+}
+
+export interface PickupDropActiveTask {
+  'taskId' : bigint,
+  'taskerId' : Principal,
+  'paymentDone' : boolean,
+  'status' : PickupDropTaskStatus,
+  'otpPickup' : bigint,
+  'otpDelivery' : bigint,
+  'acceptedAt' : bigint,
+  'completedAt' : [] | [bigint],
+}
+
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'acceptTask' : ActorMethod<[bigint], TaskResult>,
@@ -165,6 +202,18 @@ export interface _SERVICE {
   >,
   'updateTask' : ActorMethod<[bigint, TaskUpdateRequest], undefined>,
   'verifyOtp' : ActorMethod<[bigint, bigint], boolean>,
+  'acceptPickupDropTask' : ActorMethod<[bigint], boolean>,
+  'createPickupDropTask' : ActorMethod<[string, string, string, string, string, string, bigint, bigint, bigint], bigint>,
+  'getAvailablePickupDropTasks' : ActorMethod<[], Array<PickupDropTask>>,
+  'getAllPickupDropTasks' : ActorMethod<[], Array<PickupDropTask>>,
+  'getMyPostedPickupDropTasks' : ActorMethod<[], Array<PickupDropTask>>,
+  'getMyActivePickupDropTasks' : ActorMethod<[], Array<[PickupDropTask, PickupDropActiveTask]>>,
+  'getPickupDropTaskById' : ActorMethod<[bigint], [] | [PickupDropTask]>,
+  'getPickupDropActiveTaskById' : ActorMethod<[bigint], [] | [PickupDropActiveTask]>,
+  'markPickupDropDelivered' : ActorMethod<[bigint], boolean>,
+  'markPickupDropInProgress' : ActorMethod<[bigint], boolean>,
+  'verifyPickupDropOtp' : ActorMethod<[bigint, bigint], boolean>,
+  'adminCancelPickupDropTask' : ActorMethod<[bigint], boolean>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

@@ -763,6 +763,7 @@ function from_candid_record_n16(_uploadFile: (file: ExternalBlob) => Promise<Uin
     location: string;
     walletBalance: bigint;
     upiId: [] | [string];
+    aadharOrStudentId: [] | [string];
 }): {
     id: Principal;
     name: string;
@@ -772,6 +773,7 @@ function from_candid_record_n16(_uploadFile: (file: ExternalBlob) => Promise<Uin
     location: string;
     walletBalance: bigint;
     upiId?: string;
+    aadharOrStudentId?: string;
 } {
     return {
         id: value.id,
@@ -781,7 +783,8 @@ function from_candid_record_n16(_uploadFile: (file: ExternalBlob) => Promise<Uin
         phone: record_opt_to_undefined(from_candid_opt_n17(_uploadFile, _downloadFile, value.phone)),
         location: value.location,
         walletBalance: value.walletBalance,
-        upiId: record_opt_to_undefined(from_candid_opt_n17(_uploadFile, _downloadFile, value.upiId))
+        upiId: record_opt_to_undefined(from_candid_opt_n17(_uploadFile, _downloadFile, value.upiId)),
+        aadharOrStudentId: record_opt_to_undefined(from_candid_opt_n17(_uploadFile, _downloadFile, value.aadharOrStudentId))
     };
 }
 function from_candid_record_n22(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
@@ -952,6 +955,7 @@ function to_candid_record_n24(_uploadFile: (file: ExternalBlob) => Promise<Uint8
     location: string;
     walletBalance: bigint;
     upiId?: string;
+    aadharOrStudentId?: string;
 }): {
     id: Principal;
     name: string;
@@ -961,6 +965,7 @@ function to_candid_record_n24(_uploadFile: (file: ExternalBlob) => Promise<Uint8
     location: string;
     walletBalance: bigint;
     upiId: [] | [string];
+    aadharOrStudentId: [] | [string];
 } {
     return {
         id: value.id,
@@ -970,7 +975,8 @@ function to_candid_record_n24(_uploadFile: (file: ExternalBlob) => Promise<Uint8
         phone: value.phone ? candid_some(value.phone) : candid_none(),
         location: value.location,
         walletBalance: value.walletBalance,
-        upiId: value.upiId ? candid_some(value.upiId) : candid_none()
+        upiId: value.upiId ? candid_some(value.upiId) : candid_none(),
+        aadharOrStudentId: value.aadharOrStudentId ? candid_some(value.aadharOrStudentId) : candid_none()
     };
 }
 function to_candid_record_n27(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {

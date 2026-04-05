@@ -1014,5 +1014,27 @@ actor {
     pickupDropActiveTasks.get(taskId);
   };
 
+  // ─── Admin Pickup-Drop Functions ────────────────────────────────────────────
+
+  public query func getAllPickupDropTasks() : async [PickupDropTask] {
+    pickupDropTasks.values().toArray();
+  };
+
+  public query func getAllPickupDropActiveTasks() : async [PickupDropActiveTask] {
+    pickupDropActiveTasks.values().toArray();
+  };
+
+  public shared ({ caller }) func adminCancelPickupDropTask(taskId : Nat) : async Bool {
+    switch (pickupDropTasks.get(taskId)) {
+      case (null) { false };
+      case (?task) {
+        if (task.status == #completed or task.status == #cancelled) { return false };
+        pickupDropTasks.add(taskId, { task with status = #cancelled });
+        true;
+      };
+    };
+  };
+
+
 };
 

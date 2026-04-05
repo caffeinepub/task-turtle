@@ -236,4 +236,7 @@ export interface backendInterface {
     verifyPickupDropOtp(taskId: bigint, otp: bigint): Promise<boolean>;
     getPickupDropTaskById(taskId: bigint): Promise<PickupDropTask | null>;
     getPickupDropActiveTaskById(taskId: bigint): Promise<PickupDropActiveTask | null>;
+    getAllPickupDropTasks(): Promise<Array<PickupDropTask>>;
+    getAllPickupDropActiveTasks(): Promise<Array<PickupDropActiveTask>>;
+    adminCancelPickupDropTask(taskId: bigint): Promise<boolean>;
 }

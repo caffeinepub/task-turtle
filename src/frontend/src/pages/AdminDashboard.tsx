@@ -36,11 +36,13 @@ import {
   Loader2,
   Lock,
   MapPin,
+  Package,
   Phone,
   RefreshCw,
   Search,
   ShieldCheck,
   Star,
+  Truck,
   UserCheck,
   UserX,
   Users,
@@ -60,9 +62,11 @@ import type {
 import { TaskStatus } from "../backend.d";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
 import {
+  useAdminAllPickupDropTasks,
   useAdminAllTasks,
   useAdminAllUsers,
   useAdminBlockUser,
+  useAdminCancelPickupDropTask,
   useAdminCancelTask,
   useAdminMarkPayoutPaid,
   useAdminPaymentLogs,
@@ -81,7 +85,8 @@ type AdminTab =
   | "users"
   | "taskers"
   | "payments"
-  | "payouts";
+  | "payouts"
+  | "pickupDrop";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1965,6 +1970,527 @@ function PayoutsTab({
   );
 }
 
+// ─── Pickup-Drop Status Badge ────────────────────────────────────────────────
+
+function PickupDropStatusBadge({ status }: { status: any }) {
+  const statusStr =
+    typeof status === "string" ? status : (status?.__kind__ ?? "unknown");
+  const colorMap: Record<string, string> = {
+    open: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    accepted: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+    inProgress: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+    delivered: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+    completed: "bg-green-500/20 text-green-400 border-green-500/30",
+    failed: "bg-red-500/20 text-red-400 border-red-500/30",
+    cancelled: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+        colorMap[statusStr] ?? "bg-gray-500/20 text-gray-400 border-gray-500/30"
+      }`}
+    >
+      {statusStr}
+    </span>
+  );
+}
+
+// ─── Tab: Pickup-Drop ─────────────────────────────────────────────────────────
+
+const PD_PAGE_SIZE = 15;
+
+function PickupDropTab({
+  pdTasks,
+  users,
+  isLoading,
+}: {
+  pdTasks: any[];
+  users: PublicUserProfile[];
+  isLoading: boolean;
+}) {
+  const cancelPD = useAdminCancelPickupDropTask();
+  const [selected, setSelected] = useState<any | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [confirmCancel, setConfirmCancel] = useState<bigint | null>(null);
+  const [page, setPage] = useState(1);
+
+  const filtered = useMemo(() => {
+    return pdTasks.filter((t) => {
+      const statusStr =
+        typeof t.status === "string" ? t.status : (t.status?.__kind__ ?? "");
+      const matchStatus = statusFilter === "all" || statusStr === statusFilter;
+      const q = search.toLowerCase();
+      const matchSearch =
+        !q ||
+        t.pickupLocation?.toLowerCase().includes(q) ||
+        t.dropLocation?.toLowerCase().includes(q) ||
+        t.pickupOwnerName?.toLowerCase().includes(q) ||
+        t.id?.toString().includes(q);
+      return matchStatus && matchSearch;
+    });
+  }, [pdTasks, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PD_PAGE_SIZE));
+  const paginated = filtered.slice(
+    (page - 1) * PD_PAGE_SIZE,
+    page * PD_PAGE_SIZE,
+  );
+
+  function getPdUserName(principalId: string) {
+    const p = users.find((u) => u.id.toString() === principalId);
+    return p?.name || `${principalId?.slice(0, 10)}…`;
+  }
+
+  function getUserByPrincipal(principalId: string) {
+    return users.find((u) => u.id.toString() === principalId);
+  }
+
+  const formatINRLocal = (n: bigint | number) => {
+    const num = typeof n === "bigint" ? Number(n) : n;
+    return `₹${num.toLocaleString("en-IN")}`;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            className="w-full pl-9 pr-4 py-2 bg-secondary border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+            placeholder="Search by location, name, ID…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            data-ocid="admin.pickupDrop.search_input"
+          />
+        </div>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => {
+            setStatusFilter(v);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger
+            className="w-40 bg-secondary border-border rounded-xl text-sm"
+            data-ocid="admin.pickupDrop.select"
+          >
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            {[
+              "all",
+              "open",
+              "accepted",
+              "inProgress",
+              "delivered",
+              "completed",
+              "failed",
+              "cancelled",
+            ].map((s) => (
+              <SelectItem key={s} value={s}>
+                {s === "all" ? "All Status" : s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {filtered.length} tasks
+        </span>
+      </div>
+
+      {/* Table */}
+      <div
+        className="rounded-2xl border border-border bg-card overflow-hidden"
+        data-ocid="admin.pickupDrop.table"
+      >
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border hover:bg-transparent">
+                <TableHead className="text-xs">ID</TableHead>
+                <TableHead className="text-xs">Pickup → Drop</TableHead>
+                <TableHead className="text-xs">Product Worth</TableHead>
+                <TableHead className="text-xs">Tasker Fee</TableHead>
+                <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">Posted By</TableHead>
+                <TableHead className="text-xs">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginated.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                    className="text-center text-muted-foreground py-10 text-sm"
+                    data-ocid="admin.pickupDrop.empty_state"
+                  >
+                    No Pickup-Drop tasks found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginated.map((task, i) => {
+                  const statusStr =
+                    typeof task.status === "string"
+                      ? task.status
+                      : (task.status?.__kind__ ?? "");
+                  const canCancel = !["completed", "cancelled"].includes(
+                    statusStr,
+                  );
+                  return (
+                    <TableRow
+                      key={task.id?.toString()}
+                      className="border-border hover:bg-secondary/30 cursor-pointer"
+                      onClick={() => setSelected(task)}
+                      data-ocid={`admin.pickupDrop.row.${(page - 1) * PD_PAGE_SIZE + i + 1}`}
+                    >
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        #{task.id?.toString()}
+                      </TableCell>
+                      <TableCell className="text-xs max-w-[200px]">
+                        <div className="flex items-center gap-1 text-foreground">
+                          <MapPin className="w-3 h-3 text-green-400 flex-shrink-0" />
+                          <span className="truncate">
+                            {task.pickupLocation}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-muted-foreground mt-0.5">
+                          <MapPin className="w-3 h-3 text-red-400 flex-shrink-0" />
+                          <span className="truncate">{task.dropLocation}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs font-semibold text-yellow-400">
+                        {formatINRLocal(task.productWorth)}
+                      </TableCell>
+                      <TableCell className="text-xs font-semibold text-green-400">
+                        {formatINRLocal(task.taskerFee)}
+                      </TableCell>
+                      <TableCell>
+                        <PickupDropStatusBadge status={task.status} />
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {getPdUserName(task.posterId?.toString())}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        {canCancel &&
+                          (confirmCancel === task.id ? (
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="h-7 text-xs px-2"
+                                data-ocid="admin.pickupDrop.confirm_button"
+                                onClick={() => {
+                                  cancelPD.mutate(task.id);
+                                  setConfirmCancel(null);
+                                }}
+                              >
+                                Sure?
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs px-2 border-border"
+                                data-ocid="admin.pickupDrop.cancel_button"
+                                onClick={() => setConfirmCancel(null)}
+                              >
+                                No
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs px-2 border-border text-orange-400 hover:text-orange-300"
+                              data-ocid="admin.pickupDrop.delete_button"
+                              onClick={() => setConfirmCancel(task.id)}
+                            >
+                              Cancel
+                            </Button>
+                          ))}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-border h-8 w-8 p-0"
+            data-ocid="admin.pickupDrop.pagination_prev"
+            disabled={page === 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {page} / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-border h-8 w-8 p-0"
+            data-ocid="admin.pickupDrop.pagination_next"
+            disabled={page === totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {selected &&
+        (() => {
+          const taskerProfile = getUserByPrincipal(
+            selected.taskerId?.toString(),
+          );
+          const posterProfile = getUserByPrincipal(
+            selected.posterId?.toString(),
+          );
+          return (
+            <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
+              <DialogContent
+                className="max-w-lg bg-card border-border max-h-[90vh] overflow-y-auto"
+                data-ocid="admin.pickupDrop.dialog"
+              >
+                <DialogHeader>
+                  <DialogTitle className="font-display font-bold text-lg flex items-center gap-2">
+                    <Truck className="w-5 h-5 text-blue-400" />
+                    Pickup-Drop Task #{selected.id?.toString()}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Status:</span>
+                    <PickupDropStatusBadge status={selected.status} />
+                  </div>
+
+                  {/* Pickup Details */}
+                  <div className="bg-secondary/50 rounded-xl p-3 border border-border">
+                    <p className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-2">
+                      📦 Pickup Details
+                    </p>
+                    <div className="space-y-1">
+                      <p>
+                        <span className="text-muted-foreground">Name:</span>{" "}
+                        <span className="text-foreground font-medium">
+                          {selected.pickupOwnerName}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">Contact:</span>{" "}
+                        <span className="text-foreground font-medium">
+                          {selected.pickupContact}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">Location:</span>{" "}
+                        <span className="text-foreground font-medium">
+                          {selected.pickupLocation}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Drop Details */}
+                  <div className="bg-secondary/50 rounded-xl p-3 border border-border">
+                    <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">
+                      📍 Drop Details
+                    </p>
+                    <div className="space-y-1">
+                      <p>
+                        <span className="text-muted-foreground">Name:</span>{" "}
+                        <span className="text-foreground font-medium">
+                          {selected.dropOwnerName}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">Contact:</span>{" "}
+                        <span className="text-foreground font-medium">
+                          {selected.dropContact}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">Location:</span>{" "}
+                        <span className="text-foreground font-medium">
+                          {selected.dropLocation}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Payment Details */}
+                  <div className="bg-secondary/50 rounded-xl p-3 border border-border">
+                    <p className="text-xs font-semibold text-yellow-400 uppercase tracking-wider mb-2">
+                      💰 Payment Details
+                    </p>
+                    <div className="space-y-1">
+                      <p>
+                        <span className="text-muted-foreground">
+                          Product Worth (Security):
+                        </span>{" "}
+                        <span className="text-yellow-400 font-bold">
+                          {formatINRLocal(selected.productWorth)}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">
+                          Tasker Fee:
+                        </span>{" "}
+                        <span className="text-green-400 font-bold">
+                          {formatINRLocal(selected.taskerFee)}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">
+                          Boost Fee:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formatINRLocal(selected.boostFee)}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Posted By */}
+                  <div className="bg-secondary/50 rounded-xl p-3 border border-border">
+                    <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">
+                      👤 Posted By
+                    </p>
+                    <div className="space-y-1">
+                      <p>
+                        <span className="text-muted-foreground">Name:</span>{" "}
+                        <span className="text-foreground">
+                          {posterProfile?.name || "Unknown"}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">Phone:</span>{" "}
+                        <span className="text-foreground">
+                          {posterProfile?.phone ?? "N/A"}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Tasker Details */}
+                  {taskerProfile && (
+                    <div className="bg-green-surface/30 rounded-xl p-3 border border-green-vivid/20">
+                      <p className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-2">
+                        ⚡ Assigned Tasker
+                      </p>
+                      <div className="space-y-1">
+                        <p>
+                          <span className="text-muted-foreground">Name:</span>{" "}
+                          <span className="text-foreground font-medium">
+                            {taskerProfile.name}
+                          </span>
+                        </p>
+                        <p>
+                          <span className="text-muted-foreground">Phone:</span>{" "}
+                          <span className="text-foreground">
+                            {taskerProfile.phone ?? "N/A"}
+                          </span>
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <span className="text-muted-foreground">UPI ID:</span>
+                          {(taskerProfile as any).upiId ? (
+                            <span className="flex items-center gap-1.5">
+                              <span className="text-green-400 font-mono font-bold">
+                                {(taskerProfile as any).upiId}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-5 text-xs px-1.5 border-border"
+                                data-ocid="admin.pickupDrop.secondary_button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(
+                                    (taskerProfile as any).upiId,
+                                  );
+                                  toast.success("UPI copied!");
+                                }}
+                              >
+                                <Copy className="w-3 h-3" />
+                              </Button>
+                            </span>
+                          ) : (
+                            <span className="text-yellow-400 text-xs bg-yellow-500/10 px-2 py-0.5 rounded-full">
+                              No UPI set
+                            </span>
+                          )}
+                        </p>
+                        {(taskerProfile as any).aadharOrStudentId && (
+                          <p>
+                            <span className="text-muted-foreground">
+                              Aadharcard / Student ID:
+                            </span>{" "}
+                            <span className="text-foreground">
+                              {(taskerProfile as any).aadharOrStudentId}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                      {/* Manual Payout helper */}
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-xs text-muted-foreground mb-1.5">
+                          Manual Payout Amount:
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-green-400">
+                            {formatINRLocal(
+                              Number(selected.taskerFee) +
+                                Number(selected.boostFee) +
+                                Number(selected.productWorth),
+                            )}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            (fee + boost + security deposit)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    className="border-border"
+                    data-ocid="admin.pickupDrop.close_button"
+                    onClick={() => setSelected(null)}
+                  >
+                    Close
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          );
+        })()}
+    </div>
+  );
+}
+
 const TABS: { id: AdminTab; label: string; icon: React.ElementType }[] = [
   { id: "overview", label: "Overview", icon: ClipboardList },
   { id: "tasks", label: "All Tasks", icon: ClipboardList },
@@ -1972,6 +2498,7 @@ const TABS: { id: AdminTab; label: string; icon: React.ElementType }[] = [
   { id: "taskers", label: "Taskers", icon: UserCheck },
   { id: "payments", label: "Payments", icon: CreditCard },
   { id: "payouts", label: "Payouts", icon: BanknoteIcon },
+  { id: "pickupDrop", label: "Pickup-Drop", icon: Truck },
 ];
 
 export default function AdminDashboard() {
@@ -1995,6 +2522,11 @@ export default function AdminDashboard() {
     refetch: refetchUsers,
   } = useAdminAllUsers();
   const { data: taskers = [] } = useAdminTaskers();
+  const {
+    data: pdTasks = [],
+    isLoading: loadingPdTasks,
+    refetch: refetchPdTasks,
+  } = useAdminAllPickupDropTasks();
   const { refetch: refetchPayments } = useAdminPaymentLogs();
   const { refetch: refetchPayouts } = useAdminPayoutRecords();
 
@@ -2009,6 +2541,7 @@ export default function AdminDashboard() {
       refetchStats();
       refetchPayments();
       refetchPayouts();
+      refetchPdTasks();
     }, 5000);
     return () => clearInterval(interval);
   }, [
@@ -2017,6 +2550,7 @@ export default function AdminDashboard() {
     refetchStats,
     refetchPayments,
     refetchPayouts,
+    refetchPdTasks,
   ]);
 
   const handleRefresh = async () => {
@@ -2027,6 +2561,7 @@ export default function AdminDashboard() {
       refetchStats(),
       refetchPayments(),
       refetchPayouts(),
+      refetchPdTasks(),
     ]);
     setIsRefreshing(false);
   };
@@ -2035,6 +2570,7 @@ export default function AdminDashboard() {
     tasks: tasks.length,
     users: users.length,
     taskers: taskers.length,
+    pickupDrop: pdTasks.length,
   };
 
   if (checkingAdmin) {
@@ -2200,6 +2736,13 @@ export default function AdminDashboard() {
         )}
         {activeTab === "payouts" && (
           <PayoutsTab tasks={tasks} users={users} isLoading={loadingTasks} />
+        )}
+        {activeTab === "pickupDrop" && (
+          <PickupDropTab
+            pdTasks={pdTasks}
+            users={users}
+            isLoading={loadingPdTasks || loadingUsers}
+          />
         )}
       </motion.div>
     </div>

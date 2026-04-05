@@ -437,6 +437,114 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ─── How Pickup-Drop Works ───────────────────────────────────── */}
+      <section className="py-24 border-t border-border bg-surface-2/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-16"
+          >
+            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 mb-4 px-3 py-1 text-xs font-semibold tracking-wider uppercase">
+              Secure Delivery
+            </Badge>
+            <h2 className="font-display font-black text-4xl sm:text-5xl tracking-tight">
+              How <span className="text-blue-400">Pickup-Drop</span> Works
+            </h2>
+            <p className="text-muted-foreground mt-4 text-lg max-w-xl mx-auto">
+              A secure, deposit-based delivery system — product safety
+              guaranteed at every step.
+            </p>
+          </motion.div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              {
+                step: "01",
+                icon: "📋",
+                title: "User Posts Task",
+                description:
+                  "User fills in pickup details, drop details, product worth (security amount), and tasker fee. Task is publicly listed.",
+                color: "text-blue-400",
+                border: "hover:border-blue-400/30",
+              },
+              {
+                step: "02",
+                icon: "🔍",
+                title: "Tasker Finds Task",
+                description:
+                  "Tasker browses available Pickup-Drop tasks, sees product worth, net earning, and pickup/drop locations.",
+                color: "text-purple-400",
+                border: "hover:border-purple-400/30",
+              },
+              {
+                step: "03",
+                icon: "💳",
+                title: "Tasker Pays Security Deposit",
+                description:
+                  "To accept the task, tasker pays the product worth as a security deposit. This ensures product safety.",
+                color: "text-yellow-400",
+                border: "hover:border-yellow-400/30",
+              },
+              {
+                step: "04",
+                icon: "📱",
+                title: "Full Details Revealed",
+                description:
+                  "After payment, tasker gets complete pickup owner name, contact number, and drop owner's full details.",
+                color: "text-green-400",
+                border: "hover:border-green-vivid/30",
+              },
+              {
+                step: "05",
+                icon: "🚚",
+                title: "Task Completed",
+                description:
+                  "Tasker picks up the product, delivers it to the drop location, and verifies delivery with OTP from customer.",
+                color: "text-orange-400",
+                border: "hover:border-orange-400/30",
+              },
+              {
+                step: "06",
+                icon: "🏆",
+                title: "Payout Released",
+                description:
+                  "Task Turtle transfers full profit (tasker fee + boost fee) PLUS the security deposit back to tasker's account.",
+                color: "text-emerald-400",
+                border: "hover:border-emerald-400/30",
+              },
+            ].map((step, i) => (
+              <motion.div
+                key={step.step}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: i * 0.08 }}
+              >
+                <div
+                  className={`glass-card rounded-2xl p-6 h-full transition-all duration-300 hover:shadow-lg ${step.border}`}
+                >
+                  <div className="text-3xl mb-3">{step.icon}</div>
+                  <span
+                    className={`font-mono text-xs font-bold tracking-widest ${step.color}`}
+                  >
+                    STEP {step.step}
+                  </span>
+                  <h3 className="font-display font-bold text-base mt-1 mb-2">
+                    {step.title}
+                  </h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    {step.description}
+                  </p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ─── Use Cases ───────────────────────────────────────────────── */}
       <section className="py-24 border-t border-border bg-surface-2/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -580,9 +688,17 @@ export default function LandingPage() {
               TaskTurtle
             </span>
           </div>
-          <p className="text-muted-foreground text-sm">
-            © {new Date().getFullYear()} Task Turtle. All rights reserved.
-          </p>
+          <div className="text-center sm:text-right">
+            <p className="text-muted-foreground text-sm">
+              © {new Date().getFullYear()} Task Turtle. All rights reserved.
+            </p>
+            <p className="text-muted-foreground/70 text-xs mt-1">
+              Founder:{" "}
+              <span className="text-foreground font-semibold">
+                Thakur Ayush Singh
+              </span>
+            </p>
+          </div>
         </div>
       </footer>
     </div>

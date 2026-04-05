@@ -48,8 +48,8 @@ export default function ProfilePage() {
       setPhone(profile.phone ?? "");
       setLocation(profile.location ?? "");
       setIsAvailable(profile.isAvailableAsTasker ?? false);
-      setUpiId((profile as any).upiId ?? "");
-      setAadharOrStudentId((profile as any).aadharOrStudentId ?? "");
+      setUpiId(profile.upiId ?? "");
+      setAadharOrStudentId(profile.aadharOrStudentId ?? "");
     }
   }, [profile]);
 

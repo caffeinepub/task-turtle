@@ -136,6 +136,41 @@ export const PayoutRecord = IDL.Record({
   'paidDate' : IDL.Opt(IDL.Int),
 });
 
+export const PickupDropTaskStatus = IDL.Variant({
+  'open' : IDL.Null,
+  'accepted' : IDL.Null,
+  'inProgress' : IDL.Null,
+  'delivered' : IDL.Null,
+  'completed' : IDL.Null,
+  'failed' : IDL.Null,
+  'cancelled' : IDL.Null,
+});
+export const PickupDropTask = IDL.Record({
+  'id' : IDL.Nat,
+  'pickupOwnerName' : IDL.Text,
+  'pickupContact' : IDL.Text,
+  'pickupLocation' : IDL.Text,
+  'dropOwnerName' : IDL.Text,
+  'dropContact' : IDL.Text,
+  'dropLocation' : IDL.Text,
+  'productWorth' : IDL.Nat,
+  'taskerFee' : IDL.Nat,
+  'boostFee' : IDL.Nat,
+  'status' : PickupDropTaskStatus,
+  'posterId' : IDL.Principal,
+  'createdAt' : IDL.Int,
+});
+export const PickupDropActiveTask = IDL.Record({
+  'taskId' : IDL.Nat,
+  'taskerId' : IDL.Principal,
+  'paymentDone' : IDL.Bool,
+  'status' : PickupDropTaskStatus,
+  'otpPickup' : IDL.Nat,
+  'otpDelivery' : IDL.Nat,
+  'acceptedAt' : IDL.Int,
+  'completedAt' : IDL.Opt(IDL.Int),
+});
+
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'acceptTask' : IDL.Func([IDL.Nat], [TaskResult], []),
@@ -187,6 +222,7 @@ export const idlService = IDL.Service({
       [TransformationOutput],
       ['query'],
     ),
+
   'updateProfile' : IDL.Func(
       [IDL.Text, IDL.Opt(IDL.Text), IDL.Text, IDL.Bool, IDL.Opt(IDL.Text), IDL.Opt(IDL.Text)],
       [],
@@ -195,6 +231,18 @@ export const idlService = IDL.Service({
   'updateTask' : IDL.Func([IDL.Nat, TaskUpdateRequest], [], []),
   'verifyOtp' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Bool], []),
   'seedUsers' : IDL.Func([], [], []),
+  'acceptPickupDropTask' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+  'createPickupDropTask' : IDL.Func([IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat], [IDL.Nat], []),
+  'getAvailablePickupDropTasks' : IDL.Func([], [IDL.Vec(PickupDropTask)], ['query']),
+  'getAllPickupDropTasks' : IDL.Func([], [IDL.Vec(PickupDropTask)], ['query']),
+  'getMyPostedPickupDropTasks' : IDL.Func([], [IDL.Vec(PickupDropTask)], ['query']),
+  'getMyActivePickupDropTasks' : IDL.Func([], [IDL.Vec(IDL.Tuple(PickupDropTask, PickupDropActiveTask))], ['query']),
+  'getPickupDropTaskById' : IDL.Func([IDL.Nat], [IDL.Opt(PickupDropTask)], ['query']),
+  'getPickupDropActiveTaskById' : IDL.Func([IDL.Nat], [IDL.Opt(PickupDropActiveTask)], ['query']),
+  'markPickupDropDelivered' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+  'markPickupDropInProgress' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+  'verifyPickupDropOtp' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Bool], []),
+  'adminCancelPickupDropTask' : IDL.Func([IDL.Nat], [IDL.Bool], []),
 });
 
 export const idlInitArgs = [];
@@ -330,6 +378,7 @@ export const idlFactory = ({ IDL }) => {
     'acceptTask' : IDL.Func([IDL.Nat], [TaskResult], []),
     'adminCancelTask' : IDL.Func([IDL.Nat], [TaskResult], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+
     'cancelTask' : IDL.Func([IDL.Nat], [TaskResult], []),
     'createCheckoutSession' : IDL.Func(
         [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text],
@@ -388,6 +437,18 @@ export const idlFactory = ({ IDL }) => {
     'updateTask' : IDL.Func([IDL.Nat, TaskUpdateRequest], [], []),
     'verifyOtp' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Bool], []),
     'seedUsers' : IDL.Func([], [], []),
+    'acceptPickupDropTask' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+    'createPickupDropTask' : IDL.Func([IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat], [IDL.Nat], []),
+    'getAvailablePickupDropTasks' : IDL.Func([], [IDL.Vec(PickupDropTask)], ['query']),
+    'getAllPickupDropTasks' : IDL.Func([], [IDL.Vec(PickupDropTask)], ['query']),
+    'getMyPostedPickupDropTasks' : IDL.Func([], [IDL.Vec(PickupDropTask)], ['query']),
+    'getMyActivePickupDropTasks' : IDL.Func([], [IDL.Vec(IDL.Tuple(PickupDropTask, PickupDropActiveTask))], ['query']),
+    'getPickupDropTaskById' : IDL.Func([IDL.Nat], [IDL.Opt(PickupDropTask)], ['query']),
+    'getPickupDropActiveTaskById' : IDL.Func([IDL.Nat], [IDL.Opt(PickupDropActiveTask)], ['query']),
+    'markPickupDropDelivered' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+    'markPickupDropInProgress' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+    'verifyPickupDropOtp' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Bool], []),
+    'adminCancelPickupDropTask' : IDL.Func([IDL.Nat], [IDL.Bool], []),
   });
 };
 
