@@ -7,99 +7,95 @@ export type YouTubeVideo = {
   url: string;
 };
 
-const FALLBACK_VIDEOS: YouTubeVideo[] = [
-  {
-    id: "dQw4w9WgXcQ",
-    title: "How TaskTurtle Works — Post a Task in 60 Seconds",
-    thumbnail: "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
-    url: "https://youtube.com/@taskturtle",
+// TaskTurtle channel handle
+const CHANNEL_HANDLE = "taskturtle";
+// Use env variable if set, otherwise use the provided key directly
+const YT_API_KEY =
+  (import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined) ??
+  "AIzaSyAZIDVP-08VUxVzNIYALm7JKzAHuW_M0SU";
+
+/**
+ * Returns the best available thumbnail URL for a given videoId.
+ * Priority: maxresdefault → sddefault → hqdefault
+ * We always construct from videoId so it matches the actual uploaded thumbnail.
+ */
+function getBestThumbnail(
+  videoId: string,
+  snippetThumbnails?: {
+    maxres?: { url: string };
+    standard?: { url: string };
+    high?: { url: string };
+    medium?: { url: string };
+    default?: { url: string };
   },
-  {
-    id: "jNQXAC9IVRw",
-    title: "TaskTurtle: Hyper-Local Task Marketplace Demo",
-    thumbnail: "https://img.youtube.com/vi/jNQXAC9IVRw/hqdefault.jpg",
-    url: "https://youtube.com/@taskturtle",
-  },
-  {
-    id: "9bZkp7q19f0",
-    title: "Earn Money as a Tasker — Getting Started Guide",
-    thumbnail: "https://img.youtube.com/vi/9bZkp7q19f0/hqdefault.jpg",
-    url: "https://youtube.com/@taskturtle",
-  },
-  {
-    id: "kJQP7kiw5Fk",
-    title: "OTP Verification & Secure Payments Explained",
-    thumbnail: "https://img.youtube.com/vi/kJQP7kiw5Fk/hqdefault.jpg",
-    url: "https://youtube.com/@taskturtle",
-  },
-  {
-    id: "fJ9rUzIMcZQ",
-    title: "TaskTurtle vs Traditional Delivery Apps — What's Different?",
-    thumbnail: "https://img.youtube.com/vi/fJ9rUzIMcZQ/hqdefault.jpg",
-    url: "https://youtube.com/@taskturtle",
-  },
-  {
-    id: "RgKAFK5djSk",
-    title: "Community Stories: Real Taskers, Real Earnings",
-    thumbnail: "https://img.youtube.com/vi/RgKAFK5djSk/hqdefault.jpg",
-    url: "https://youtube.com/@taskturtle",
-  },
-];
+): string {
+  // Prefer snippet thumbnails (already returned by API) in quality order
+  if (snippetThumbnails?.maxres?.url) return snippetThumbnails.maxres.url;
+  if (snippetThumbnails?.standard?.url) return snippetThumbnails.standard.url;
+  if (snippetThumbnails?.high?.url) return snippetThumbnails.high.url;
+  if (snippetThumbnails?.medium?.url) return snippetThumbnails.medium.url;
+  // Fallback: construct from videoId — maxresdefault is the custom thumbnail YT creators set
+  return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+}
 
 async function fetchYouTubeVideos(): Promise<YouTubeVideo[]> {
-  const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined;
-
-  if (!apiKey) {
-    return FALLBACK_VIDEOS;
-  }
-
   try {
-    // Step 1: Resolve channel handle to channel ID
+    // Step 1: Resolve @taskturtle handle → channel ID
     const channelRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=taskturtle&key=${apiKey}`,
+      `https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${CHANNEL_HANDLE}&key=${YT_API_KEY}`,
     );
 
     if (!channelRes.ok) {
-      console.warn("[YouTubeSlider] Channel lookup failed, using fallback");
-      return FALLBACK_VIDEOS;
+      const err = await channelRes.text();
+      console.warn("[YouTubeSlider] Channel lookup failed:", err);
+      throw new Error("channel_lookup_failed");
     }
 
     const channelData = await channelRes.json();
     const channelId: string | undefined = channelData?.items?.[0]?.id;
 
     if (!channelId) {
-      console.warn("[YouTubeSlider] Channel ID not found, using fallback");
-      return FALLBACK_VIDEOS;
+      console.warn(
+        "[YouTubeSlider] Channel ID not found in response:",
+        channelData,
+      );
+      throw new Error("channel_id_not_found");
     }
 
-    // Step 2: Fetch latest videos
+    console.log("[YouTubeSlider] Resolved channel ID:", channelId);
+
+    // Step 2: Fetch latest videos — request maxres thumbnails via snippet
     const videosRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=8&order=date&type=video&key=${apiKey}`,
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=8&order=date&type=video&key=${YT_API_KEY}`,
     );
 
     if (!videosRes.ok) {
-      console.warn("[YouTubeSlider] Videos fetch failed, using fallback");
-      return FALLBACK_VIDEOS;
+      const err = await videosRes.text();
+      console.warn("[YouTubeSlider] Videos fetch failed:", err);
+      throw new Error("videos_fetch_failed");
     }
 
     const videosData = await videosRes.json();
-    const items = videosData?.items ?? [];
+    const items: unknown[] = videosData?.items ?? [];
 
     if (!items.length) {
-      return FALLBACK_VIDEOS;
+      console.warn("[YouTubeSlider] No videos returned from API");
+      throw new Error("no_videos");
     }
 
     const videos: YouTubeVideo[] = items
-      .filter(
-        (item: Record<string, unknown>) =>
-          !!(item as { id?: { videoId?: string } }).id?.videoId,
-      )
-      .map((item: Record<string, unknown>) => {
+      .filter((item) => {
+        const i = item as { id?: { videoId?: string } };
+        return !!i.id?.videoId;
+      })
+      .map((item) => {
         const typedItem = item as {
           id: { videoId: string };
           snippet: {
             title: string;
             thumbnails: {
+              maxres?: { url: string };
+              standard?: { url: string };
               high?: { url: string };
               medium?: { url: string };
               default?: { url: string };
@@ -108,10 +104,8 @@ async function fetchYouTubeVideos(): Promise<YouTubeVideo[]> {
         };
         const videoId = typedItem.id.videoId;
         const snippet = typedItem.snippet;
-        const thumbnail =
-          snippet.thumbnails.high?.url ??
-          snippet.thumbnails.medium?.url ??
-          `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+        // Use the actual thumbnail from the channel (custom thumbnail set by creator)
+        const thumbnail = getBestThumbnail(videoId, snippet.thumbnails);
 
         return {
           id: videoId,
@@ -121,10 +115,12 @@ async function fetchYouTubeVideos(): Promise<YouTubeVideo[]> {
         };
       });
 
-    return videos.length > 0 ? videos : FALLBACK_VIDEOS;
+    console.log(`[YouTubeSlider] Loaded ${videos.length} videos from channel`);
+    return videos;
   } catch (err) {
     console.warn("[YouTubeSlider] Error fetching videos:", err);
-    return FALLBACK_VIDEOS;
+    // Re-throw so React Query shows error state (no fake fallback videos)
+    throw err;
   }
 }
 
@@ -132,10 +128,10 @@ export function useYouTubeVideos() {
   const { data, isLoading, isError } = useQuery<YouTubeVideo[]>({
     queryKey: ["youtube-videos", "taskturtle"],
     queryFn: fetchYouTubeVideos,
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
-    refetchOnWindowFocus: true,
-    retry: 1,
+    staleTime: 5 * 60 * 1000, // 5 min cache
+    refetchInterval: 5 * 60 * 1000, // auto-refresh every 5 min
+    refetchOnWindowFocus: true, // refresh when user comes back to tab
+    retry: 2,
   });
 
   return {
