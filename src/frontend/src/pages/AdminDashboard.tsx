@@ -32,6 +32,7 @@ import {
   ClipboardList,
   Copy,
   CreditCard,
+  Eye,
   IndianRupee,
   Loader2,
   Lock,
@@ -703,6 +704,8 @@ function AllTasksTab({
   const [page, setPage] = useState(1);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [cancelTarget, setCancelTarget] = useState<bigint | null>(null);
+  const [viewingProfile, setViewingProfile] =
+    useState<PublicUserProfile | null>(null);
   const cancelTask = useAdminCancelTask();
 
   const profileMap = useMemo(() => {
@@ -802,6 +805,7 @@ function AllTasksTab({
                   Created Date
                 </TableHead>
                 <TableHead className="text-xs">Actions</TableHead>
+                <TableHead className="text-xs w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -918,6 +922,24 @@ function AllTasksTab({
                             ))}
                         </div>
                       </TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const profile = users.find(
+                              (p) =>
+                                p.id.toString() === task.customerId.toString(),
+                            );
+                            if (profile) setViewingProfile(profile);
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                          title="View poster profile"
+                          data-ocid="admin.tasks.open_modal_button"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      </TableCell>
                     </motion.tr>
                   );
                 })
@@ -939,6 +961,98 @@ function AllTasksTab({
         open={!!selectedTask}
         onClose={() => setSelectedTask(null)}
       />
+
+      {/* User profile quick-view modal */}
+      {viewingProfile && (
+        <Dialog
+          open={!!viewingProfile}
+          onOpenChange={(o) => !o && setViewingProfile(null)}
+        >
+          <DialogContent
+            className="max-w-md bg-surface-2 border-border text-foreground"
+            data-ocid="admin.tasks.modal"
+          >
+            <DialogHeader>
+              <DialogTitle>User Profile</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 bg-secondary/40 rounded-xl p-4">
+                <div className="w-12 h-12 bg-green-surface rounded-2xl flex items-center justify-center text-2xl font-black text-green-vivid">
+                  {viewingProfile.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-bold text-lg">{viewingProfile.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {viewingProfile.isAvailableAsTasker
+                      ? "🟢 Tasker"
+                      : "👤 User"}
+                  </p>
+                </div>
+              </div>
+              {viewingProfile.phone && (
+                <div className="bg-secondary/40 rounded-xl p-3">
+                  <p className="text-xs text-muted-foreground">Phone</p>
+                  <a
+                    href={`tel:${viewingProfile.phone}`}
+                    className="font-semibold text-green-vivid"
+                  >
+                    {viewingProfile.phone}
+                  </a>
+                </div>
+              )}
+              {(viewingProfile.upiId?.[0] || (viewingProfile as any).upiId) && (
+                <div className="bg-secondary/40 rounded-xl p-3">
+                  <p className="text-xs text-muted-foreground">UPI ID</p>
+                  <p className="font-mono font-semibold">
+                    {viewingProfile.upiId?.[0] ?? (viewingProfile as any).upiId}
+                  </p>
+                </div>
+              )}
+              {(viewingProfile.aadharOrStudentId?.[0] ||
+                (viewingProfile as any).aadharOrStudentId) && (
+                <div className="bg-secondary/40 rounded-xl p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Aadharcard / Student ID
+                  </p>
+                  <p className="font-semibold">
+                    {viewingProfile.aadharOrStudentId?.[0] ??
+                      (viewingProfile as any).aadharOrStudentId}
+                  </p>
+                </div>
+              )}
+              <div className="bg-secondary/40 rounded-xl p-3">
+                <p className="text-xs text-muted-foreground">Location</p>
+                <p className="font-semibold">
+                  {viewingProfile.location || "—"}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-secondary/40 rounded-xl p-3 text-center">
+                  <p className="text-lg font-black text-green-vivid">
+                    {formatINR(viewingProfile.walletBalance)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Wallet</p>
+                </div>
+                <div className="bg-secondary/40 rounded-xl p-3 text-center">
+                  <p className="text-lg font-black text-yellow-400">
+                    ⭐ {Number(viewingProfile.rating)}/5
+                  </p>
+                  <p className="text-xs text-muted-foreground">Rating</p>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setViewingProfile(null)}
+                data-ocid="admin.tasks.close_button"
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -1487,6 +1601,7 @@ function TaskersTab({
                 <TableHead className="text-xs">Active</TableHead>
                 <TableHead className="text-xs">Total Earnings</TableHead>
                 <TableHead className="text-xs">Pending Payout</TableHead>
+                <TableHead className="text-xs">UPI ID</TableHead>
                 <TableHead className="text-xs">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -1495,7 +1610,7 @@ function TaskersTab({
                 <LoadingRows variant="9col" />
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9}>
+                  <TableCell colSpan={10}>
                     <EmptyState
                       icon="🧑‍💼"
                       title="No taskers yet"
@@ -1571,6 +1686,17 @@ function TaskersTab({
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">—</span>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {user.upiId?.[0] || (user as any).upiId ? (
+                          <span className="font-mono text-foreground">
+                            {user.upiId?.[0] ?? (user as any).upiId}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground italic">
+                            Not Provided
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">

@@ -677,8 +677,9 @@ export default function LandingPage() {
 
       {/* ─── Footer ──────────────────────────────────────────────────── */}
       <footer className="border-t border-border py-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          {/* Logo row */}
+          <div className="flex items-center justify-center gap-2.5 mb-4">
             <img
               src={logoImg}
               alt="Task Turtle"
@@ -688,17 +689,19 @@ export default function LandingPage() {
               TaskTurtle
             </span>
           </div>
-          <div className="text-center sm:text-right">
-            <p className="text-muted-foreground text-sm">
-              © {new Date().getFullYear()} Task Turtle. All rights reserved.
+          {/* Founder line */}
+          <div className="text-center space-y-1">
+            <p className="text-sm text-muted-foreground">
+              Founder of TaskTurtle
             </p>
-            <p className="text-muted-foreground/70 text-xs mt-1">
-              Founder:{" "}
-              <span className="text-foreground font-semibold">
-                Thakur Ayush Singh
-              </span>
+            <p className="text-base font-bold text-green-vivid">
+              Ayush Singh Rajput
             </p>
           </div>
+          {/* Copyright */}
+          <p className="text-center text-muted-foreground/70 text-xs mt-4">
+            © {new Date().getFullYear()} Task Turtle. All rights reserved.
+          </p>
         </div>
       </footer>
     </div>

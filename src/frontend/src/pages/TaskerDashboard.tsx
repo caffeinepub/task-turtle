@@ -49,6 +49,7 @@ import {
   useWalletBalance,
 } from "../hooks/useQueries";
 import { formatINR, formatTimestamp } from "../utils/format";
+import { getTaskEmoji } from "../utils/taskImage";
 
 function parseStoreLocation(raw: string): {
   store: string;
@@ -135,8 +136,6 @@ function AvailableTaskCard({ task, index }: { task: Task; index: number }) {
   const acceptTask = useAcceptTask();
   const parsed = parseStoreLocation(task.storeLocation);
 
-  const total = task.amount + (task.tip ?? 0n);
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -144,7 +143,11 @@ function AvailableTaskCard({ task, index }: { task: Task; index: number }) {
       transition={{ delay: index * 0.06 }}
       className="glass-card rounded-2xl p-5 border-border hover:border-green-vivid/25 hover:shadow-green-sm transition-all duration-300"
     >
-      <div className="flex items-start justify-between gap-3 mb-3">
+      {/* Emoji + title row */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center text-3xl flex-shrink-0">
+          {getTaskEmoji(task.title, task.description)}
+        </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-foreground">{task.title}</h3>
           <p className="text-muted-foreground text-sm mt-0.5 line-clamp-2">
@@ -152,14 +155,8 @@ function AvailableTaskCard({ task, index }: { task: Task; index: number }) {
           </p>
         </div>
         <div className="text-right flex-shrink-0">
-          <p className="font-display font-black text-xl text-green-vivid">
-            {formatINR(total)}
-          </p>
-          {task.tip && task.tip > 0n && (
-            <p className="text-xs text-muted-foreground">
-              incl. {formatINR(task.tip)} tip
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground">Buy Item</p>
+          <p className="font-bold text-foreground">{formatINR(task.amount)}</p>
         </div>
       </div>
 
@@ -182,6 +179,18 @@ function AvailableTaskCard({ task, index }: { task: Task; index: number }) {
             <Phone className="w-3 h-3" />
             Call Customer: {parsed.contact}
           </a>
+        )}
+      </div>
+
+      {/* Earning display */}
+      <div className="bg-green-surface/20 border border-green-vivid/20 rounded-xl p-3 mb-3">
+        <p className="text-xs text-muted-foreground mb-0.5">Your Earning</p>
+        {task.tip && task.tip > 0n ? (
+          <p className="font-display font-black text-xl text-green-vivid">
+            Earn {formatINR(task.tip)}
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">No fee set</p>
         )}
       </div>
 
@@ -744,6 +753,10 @@ export default function TaskerDashboard() {
     refetch: refetchPdActive,
   } = useMyActivePickupDropTasks();
 
+  const [taskerTab, setTaskerTab] = useState<"available" | "active">(
+    "available",
+  );
+
   // Rapido-style sound notification when new tasks arrive
   useNewTaskDetector(availableTasks, profile?.isAvailableAsTasker ?? false);
 
@@ -786,13 +799,139 @@ export default function TaskerDashboard() {
         <EarningsCard />
       </div>
 
-      {/* Main grid */}
-      <div className="grid lg:grid-cols-2 gap-8">
+      {/* Mobile sticky tab bar */}
+      <div className="sticky top-16 z-40 md:hidden bg-background/95 backdrop-blur-lg border-b border-border px-4 py-2 -mx-4 mb-4">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setTaskerTab("available")}
+            data-ocid="tasker.available_tasks.tab"
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              taskerTab === "available"
+                ? "bg-green-surface text-green-vivid shadow-green-sm"
+                : "bg-secondary text-muted-foreground"
+            }`}
+          >
+            📋 Available Tasks
+            {availableTasks.length > 0 && (
+              <span className="bg-green-vivid/20 text-green-vivid text-xs px-1.5 py-0.5 rounded-full font-bold">
+                {availableTasks.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTaskerTab("active")}
+            data-ocid="tasker.active_tasks.tab"
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              taskerTab === "active"
+                ? "bg-orange-400/15 text-orange-400 border border-orange-400/30"
+                : "bg-secondary text-muted-foreground"
+            }`}
+          >
+            🚀 My Active
+            {activeTasks.length > 0 && (
+              <span className="bg-orange-400/20 text-orange-400 text-xs px-1.5 py-0.5 rounded-full font-bold">
+                {activeTasks.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile: show only selected tab */}
+      <div
+        className={`md:hidden ${taskerTab === "available" ? "block" : "hidden"}`}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display font-bold text-xl">
+            📋 Available Tasks
+            {availableTasks.length > 0 && (
+              <Badge className="ml-2 bg-green-surface text-green-vivid border-0 text-xs">
+                {availableTasks.length}
+              </Badge>
+            )}
+          </h2>
+        </div>
+        {loadingAvailable ? (
+          <div className="space-y-4">
+            {[1, 2].map((i) => (
+              <Skeleton key={i} className="h-40 rounded-2xl bg-secondary" />
+            ))}
+          </div>
+        ) : availableTasks.length === 0 ? (
+          <div
+            data-ocid="tasker.available_tasks.empty_state"
+            className="glass-card rounded-2xl p-10 text-center border-border"
+          >
+            <div className="text-4xl mb-3">🔍</div>
+            <h3 className="font-semibold mb-1">No tasks nearby</h3>
+            <p className="text-muted-foreground text-sm">
+              Check back in a moment — tasks update every 15 seconds
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <AnimatePresence>
+              {availableTasks.map((task, i) => (
+                <AvailableTaskCard
+                  key={String(task.id)}
+                  task={task}
+                  index={i}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+      </div>
+      <div
+        className={`md:hidden ${taskerTab === "active" ? "block" : "hidden"}`}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display font-bold text-xl">
+            🚀 My Active Tasks
+            {activeTasks.length > 0 && (
+              <Badge className="ml-2 bg-orange-400/15 text-orange-400 border-0 text-xs">
+                {activeTasks.length}
+              </Badge>
+            )}
+          </h2>
+        </div>
+        {loadingActive ? (
+          <div className="space-y-4">
+            {[1, 2].map((i) => (
+              <Skeleton key={i} className="h-48 rounded-2xl bg-secondary" />
+            ))}
+          </div>
+        ) : activeTasks.length === 0 ? (
+          <div
+            data-ocid="tasker.active_tasks.empty_state"
+            className="glass-card rounded-2xl p-10 text-center border-border"
+          >
+            <div className="text-4xl mb-3">📦</div>
+            <h3 className="font-semibold mb-1">No active tasks</h3>
+            <p className="text-muted-foreground text-sm">
+              Accept a task from the Available tab to start earning
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <AnimatePresence>
+              {activeTasks.map((task, i) => (
+                <ActiveTaskCard key={String(task.id)} task={task} index={i} />
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: always show 2-column grid */}
+      <div className="hidden md:grid md:grid-cols-2 gap-8">
         {/* Available tasks */}
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display font-bold text-xl">
-              Available Tasks
+              📋 Available Tasks
               {availableTasks.length > 0 && (
                 <Badge className="ml-2 bg-green-surface text-green-vivid border-0 text-xs">
                   {availableTasks.length}
@@ -800,7 +939,6 @@ export default function TaskerDashboard() {
               )}
             </h2>
           </div>
-
           {loadingAvailable ? (
             <div className="space-y-4">
               {[1, 2].map((i) => (
@@ -832,12 +970,11 @@ export default function TaskerDashboard() {
             </div>
           )}
         </div>
-
         {/* Active tasks */}
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display font-bold text-xl">
-              My Active Tasks
+              🚀 My Active Tasks
               {activeTasks.length > 0 && (
                 <Badge className="ml-2 bg-orange-400/15 text-orange-400 border-0 text-xs">
                   {activeTasks.length}
@@ -845,7 +982,6 @@ export default function TaskerDashboard() {
               )}
             </h2>
           </div>
-
           {loadingActive ? (
             <div className="space-y-4">
               {[1, 2].map((i) => (

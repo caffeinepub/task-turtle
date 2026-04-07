@@ -50,6 +50,7 @@ import {
   useRateTask,
 } from "../hooks/useQueries";
 import { formatINR, formatTimestamp, inrToPaise } from "../utils/format";
+import { getTaskEmoji } from "../utils/taskImage";
 
 function parseStoreLocation(raw: string): {
   store: string;
@@ -74,10 +75,11 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
   const [customerLocation, setCustomerLocation] = useState("");
   const [storeLocation, setStoreLocation] = useState("");
   const [amountINR, setAmountINR] = useState("");
-  const [tipINR, setTipINR] = useState("");
+  const [taskerFeeINR, setTaskerFeeINR] = useState("");
+  const [boostINR, setBoostINR] = useState(0);
   const [contactNumber, setContactNumber] = useState("");
-  const [showCashfree, setShowCashfree] = useState(false);
-  const [pendingTask, setPendingTask] = useState<PendingTask | null>(null);
+  const [_showCashfree, _setShowCashfree] = useState(false);
+  const [_pendingTask, setPendingTask] = useState<PendingTask | null>(null);
 
   const createTask = useCreateTask();
   const { identity, login, isLoggingIn, isInitializing } =
@@ -89,8 +91,16 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
   const isConnecting = isInitializing || isActorFetching;
   const isConnectionFailed = false;
 
-  const totalINR =
-    (Number.parseFloat(amountINR) || 0) + (Number.parseFloat(tipINR) || 0) + 4; // platform fee
+  const getPlatformFee = (amount: number): number => {
+    if (amount <= 99) return 4;
+    if (amount <= 299) return 7;
+    return 10;
+  };
+
+  const amountNum = Number.parseFloat(amountINR) || 0;
+  const taskerFeeNum = Number.parseFloat(taskerFeeINR) || 0;
+  const platformFee = getPlatformFee(amountNum);
+  const totalINR = amountNum + taskerFeeNum + boostINR + platformFee;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,36 +119,69 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
     )
       return;
 
+    if (taskerFeeNum < 10) return; // Minimum tasker fee check
+
     const encodedStoreLocation = contactNumber.trim()
       ? `${storeLocation}|||CONTACT:${contactNumber.trim()}`
       : storeLocation;
 
-    // Stage task and open Cashfree payment
-    setPendingTask({
+    const taskData: PendingTask = {
       title,
       description,
-      amount: inrToPaise(Number.parseFloat(amountINR)),
-      tip: tipINR ? inrToPaise(Number.parseFloat(tipINR)) : null,
+      amount: inrToPaise(amountNum),
+      tip: taskerFeeNum > 0 ? inrToPaise(taskerFeeNum) : null,
       customerLocation,
       storeLocation: encodedStoreLocation,
-    });
-    setShowCashfree(true);
-  };
+    };
 
-  const handlePaymentSuccess = async () => {
-    if (!pendingTask) return;
-    setShowCashfree(false);
-    await createTask.mutateAsync(pendingTask);
-    // Reset form
-    setTitle("");
-    setDescription("");
-    setCustomerLocation("");
-    setStoreLocation("");
-    setAmountINR("");
-    setTipINR("");
-    setContactNumber("");
-    setPendingTask(null);
-    onSuccess();
+    // Load Razorpay script dynamically
+    const loadRazorpay = () =>
+      new Promise<boolean>((resolve) => {
+        if ((window as any).Razorpay) {
+          resolve(true);
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.body.appendChild(script);
+      });
+
+    const loaded = await loadRazorpay();
+    if (!loaded) return;
+
+    const totalPaise = Math.round(totalINR * 100);
+    const options = {
+      key: "rzp_live_SRNbTwyEmzQSvO",
+      amount: totalPaise,
+      currency: "INR",
+      name: "Task Turtle",
+      description: `Post Task: ${title}`,
+      handler: async () => {
+        await createTask.mutateAsync(taskData);
+        setTitle("");
+        setDescription("");
+        setCustomerLocation("");
+        setStoreLocation("");
+        setAmountINR("");
+        setTaskerFeeINR("");
+        setBoostINR(0);
+        setContactNumber("");
+        setPendingTask(null);
+        onSuccess();
+      },
+      prefill: {},
+      theme: { color: "#22c55e" },
+      modal: {
+        ondismiss: () => {
+          setPendingTask(null);
+        },
+      },
+    };
+    setPendingTask(taskData);
+    const rzp = new (window as any).Razorpay(options);
+    rzp.open();
   };
 
   return (
@@ -339,49 +382,97 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
           </div>
           <div className="space-y-2">
             <Label
-              htmlFor="tip"
+              htmlFor="tasker-fee"
               className="text-sm font-semibold text-foreground"
             >
-              Tip (₹){" "}
-              <span className="text-muted-foreground font-normal">
-                — optional
+              <IndianRupee className="w-3.5 h-3.5 inline mr-1.5 text-muted-foreground" />
+              Tasker Fee (₹) *{" "}
+              <span className="text-muted-foreground font-normal text-xs">
+                — min ₹10
               </span>
             </Label>
             <Input
-              id="tip"
+              id="tasker-fee"
+              data-ocid="dashboard.tasker_fee_input"
               type="number"
-              placeholder="e.g., 20"
-              value={tipINR}
-              onChange={(e) => setTipINR(e.target.value)}
-              min="0"
-              step="0.01"
+              placeholder="e.g., 20 (min ₹10)"
+              value={taskerFeeINR}
+              onChange={(e) => setTaskerFeeINR(e.target.value)}
+              min="10"
+              step="1"
               className="bg-secondary border-border focus:border-green-vivid/50 rounded-xl h-12"
             />
+            {taskerFeeINR && Number.parseFloat(taskerFeeINR) < 10 && (
+              <p className="text-xs text-red-400 font-medium">
+                ⚠️ Minimum tasker fee is ₹10
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Boost selector */}
+        <div className="space-y-2">
+          <Label className="text-sm font-semibold text-foreground">
+            <Zap className="w-3.5 h-3.5 inline mr-1.5 text-yellow-400" />
+            Boost (₹){" "}
+            <span className="text-muted-foreground font-normal text-xs">
+              — optional, attracts taskers faster
+            </span>
+          </Label>
+          <div className="flex gap-2">
+            {([0, 10, 20] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                data-ocid={`dashboard.boost_${v}_toggle`}
+                onClick={() => setBoostINR(v)}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${
+                  boostINR === v
+                    ? "bg-yellow-400/15 text-yellow-400 border-yellow-400/40 shadow-[0_2px_8px_oklch(0.85_0.18_85/0.2)]"
+                    : "bg-secondary text-muted-foreground border-border hover:border-yellow-400/30"
+                }`}
+              >
+                {v === 0 ? "No Boost" : `₹${v}`}
+              </button>
+            ))}
           </div>
         </div>
 
         {amountINR && (
           <div className="bg-secondary/50 rounded-xl p-4 text-sm space-y-1 border border-border">
+            <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
+              Payment Breakdown
+            </p>
             <div className="flex justify-between text-muted-foreground">
-              <span>Task amount</span>
+              <span>Amount (Product)</span>
               <span className="text-foreground font-medium">
-                {formatINR(inrToPaise(Number.parseFloat(amountINR) || 0))}
+                {formatINR(inrToPaise(amountNum))}
               </span>
             </div>
-            {tipINR && (
+            <div className="flex justify-between text-muted-foreground">
+              <span>Tasker Fee</span>
+              <span className="text-foreground font-medium">
+                {taskerFeeNum > 0 ? (
+                  formatINR(inrToPaise(taskerFeeNum))
+                ) : (
+                  <span className="text-xs italic">not set</span>
+                )}
+              </span>
+            </div>
+            {boostINR > 0 && (
               <div className="flex justify-between text-muted-foreground">
-                <span>Tip</span>
-                <span className="text-foreground font-medium">
-                  {formatINR(inrToPaise(Number.parseFloat(tipINR) || 0))}
-                </span>
+                <span>Boost</span>
+                <span className="text-yellow-400 font-medium">₹{boostINR}</span>
               </div>
             )}
             <div className="flex justify-between text-muted-foreground border-t border-border pt-1">
-              <span>Platform fee</span>
-              <span className="text-foreground font-medium">₹4</span>
+              <span>Platform Fee</span>
+              <span className="text-foreground font-medium">
+                ₹{platformFee}
+              </span>
             </div>
-            <div className="flex justify-between font-semibold text-green-vivid border-t border-border pt-1">
-              <span>Total charged (Cashfree Escrow)</span>
+            <div className="flex justify-between font-bold text-green-vivid border-t border-border pt-1 text-base">
+              <span>Total Payable</span>
               <span>{formatINR(inrToPaise(totalINR))}</span>
             </div>
           </div>
@@ -394,7 +485,7 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
             <span className="text-foreground font-semibold">escrow</span> •
             Released to tasker after OTP verification •{" "}
             <span className="text-foreground font-medium">
-              Secured by Cashfree
+              Secured by Razorpay
             </span>
           </span>
         </div>
@@ -403,7 +494,12 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
           type="submit"
           size="lg"
           data-ocid="dashboard.task_submit_button"
-          disabled={createTask.isPending || isLoggingIn || isConnecting}
+          disabled={
+            createTask.isPending ||
+            isLoggingIn ||
+            isConnecting ||
+            (!!taskerFeeINR && Number.parseFloat(taskerFeeINR) < 10)
+          }
           className={`w-full font-bold py-6 transition-all rounded-2xl ${
             isConnecting
               ? "bg-secondary text-muted-foreground cursor-wait"
@@ -435,24 +531,15 @@ function PostTaskForm({ onSuccess }: { onSuccess: () => void }) {
           ) : (
             <>
               <PlusCircle className="w-5 h-5 mr-2" />
-              Pay &amp; Post Task (Escrow)
+              {amountINR
+                ? `Pay ${formatINR(inrToPaise(totalINR))} & Post Task`
+                : "Pay & Post Task"}
             </>
           )}
         </Button>
       </form>
 
-      {pendingTask && (
-        <CashfreePaymentModal
-          open={showCashfree}
-          amountINR={totalINR}
-          taskTitle={pendingTask.title}
-          onSuccess={handlePaymentSuccess}
-          onClose={() => {
-            setShowCashfree(false);
-            setPendingTask(null);
-          }}
-        />
-      )}
+      {/* Razorpay handles payment — no inline modal needed */}
     </>
   );
 }
@@ -483,16 +570,21 @@ function TaskCard({
       data-ocid={`dashboard.task_item.${index + 1}`}
       className="glass-card rounded-2xl p-5 border-border hover:border-green-vivid/20 transition-all duration-300 space-y-4"
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start gap-3 mb-1">
+        <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center text-2xl flex-shrink-0">
+          {getTaskEmoji(task.title, task.description)}
+        </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-foreground truncate">
-            {task.title}
-          </h3>
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-semibold text-foreground truncate">
+              {task.title}
+            </h3>
+            <TaskStatusBadge status={task.status} />
+          </div>
           <p className="text-muted-foreground text-sm mt-0.5 line-clamp-2">
             {task.description}
           </p>
         </div>
-        <TaskStatusBadge status={task.status} />
       </div>
 
       <div className="space-y-1.5">
@@ -514,19 +606,49 @@ function TaskCard({
         )}
       </div>
 
-      <div className="flex items-center gap-4">
-        <div>
-          <p className="text-xs text-muted-foreground">Amount</p>
-          <p className="font-bold text-green-vivid">{formatINR(task.amount)}</p>
+      {/* Payment Summary */}
+      <div className="bg-secondary/40 rounded-xl p-3 space-y-1 text-sm border border-border">
+        <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
+          Payment Summary
+        </p>
+        <div className="flex justify-between text-muted-foreground">
+          <span>Product Amount</span>
+          <span className="text-foreground font-medium">
+            {formatINR(task.amount)}
+          </span>
         </div>
-        {task.tip && task.tip > 0n && (
-          <div>
-            <p className="text-xs text-muted-foreground">Tip</p>
-            <p className="font-semibold text-foreground">
+        {task.tip != null && task.tip > 0n && (
+          <div className="flex justify-between text-muted-foreground">
+            <span>Tasker Fee</span>
+            <span className="text-foreground font-medium">
               {formatINR(task.tip)}
-            </p>
+            </span>
           </div>
         )}
+        <div className="flex justify-between text-muted-foreground border-t border-border pt-1">
+          <span>Platform Fee</span>
+          <span className="text-foreground font-medium">
+            {Number(task.amount) / 100 <= 99
+              ? "₹4"
+              : Number(task.amount) / 100 <= 299
+                ? "₹7"
+                : "₹10"}
+          </span>
+        </div>
+        <div className="flex justify-between font-bold text-green-vivid border-t border-border pt-1">
+          <span>Total Paid</span>
+          <span>
+            {formatINR(
+              task.amount +
+                (task.tip ?? 0n) +
+                (task.amount <= 9900n
+                  ? 400n
+                  : task.amount <= 29900n
+                    ? 700n
+                    : 1000n),
+            )}
+          </span>
+        </div>
       </div>
 
       {isDelivered && (
@@ -625,8 +747,6 @@ function FindTaskCard({ task, index }: { task: Task; index: number }) {
   const acceptTask = useAcceptTask();
   const navigate = useNavigate();
   const parsed = parseStoreLocation(task.storeLocation);
-  const total = task.amount + (task.tip ?? 0n);
-
   const handleAccept = () => {
     acceptTask.mutate(task.id, {
       onSuccess: () => {
@@ -643,7 +763,11 @@ function FindTaskCard({ task, index }: { task: Task; index: number }) {
       data-ocid={`dashboard.find_task_item.${index + 1}`}
       className="glass-card rounded-2xl p-5 border-border hover:border-green-vivid/25 hover:shadow-green-sm transition-all duration-300 space-y-4"
     >
-      <div className="flex items-start justify-between gap-3">
+      {/* Emoji image + title */}
+      <div className="flex items-center gap-3 mb-1">
+        <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center text-3xl flex-shrink-0">
+          {getTaskEmoji(task.title, task.description)}
+        </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-foreground">{task.title}</h3>
           <p className="text-muted-foreground text-sm mt-0.5 line-clamp-2">
@@ -651,14 +775,8 @@ function FindTaskCard({ task, index }: { task: Task; index: number }) {
           </p>
         </div>
         <div className="text-right flex-shrink-0">
-          <p className="font-display font-black text-xl text-green-vivid">
-            {formatINR(total)}
-          </p>
-          {task.tip && task.tip > 0n && (
-            <p className="text-xs text-muted-foreground">
-              incl.&nbsp;{formatINR(task.tip)} tip
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground">Buy Item</p>
+          <p className="font-bold text-foreground">{formatINR(task.amount)}</p>
         </div>
       </div>
 
@@ -685,25 +803,23 @@ function FindTaskCard({ task, index }: { task: Task; index: number }) {
         )}
       </div>
 
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>
-          Base:&nbsp;
-          <span className="text-foreground font-medium">
-            {formatINR(task.amount)}
-          </span>
-          {task.tip && task.tip > 0n && (
-            <>
-              &nbsp;+&nbsp;
-              <span className="text-green-vivid font-semibold">
-                {formatINR(task.tip)} tip
-              </span>
-            </>
-          )}
-        </span>
-        {task.createdAt && (
-          <span>Posted&nbsp;{formatTimestamp(task.createdAt)}</span>
+      {/* Earning display */}
+      <div className="bg-green-surface/20 border border-green-vivid/20 rounded-xl p-3">
+        <p className="text-xs text-muted-foreground mb-0.5">Your Earning</p>
+        {task.tip && task.tip > 0n ? (
+          <p className="font-display font-black text-xl text-green-vivid">
+            Earn {formatINR(task.tip)}
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">No fee set</p>
         )}
       </div>
+
+      {task.createdAt && (
+        <p className="text-xs text-muted-foreground">
+          Posted {formatTimestamp(task.createdAt)}
+        </p>
+      )}
 
       <Button
         size="sm"

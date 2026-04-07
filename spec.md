@@ -1,46 +1,94 @@
 # Task Turtle
 
 ## Current State
-- Task Turtle is a fully functional hyper-local task marketplace with Daily Tasks and Pickup-Drop Tasks as separate modules
-- My Profile has UPI ID and Aadharcard Details / Student ID fields but saving fails with IDL error (aadharOrStudentId not serialized in backend.ts)
-- Admin dashboard has 6 tabs: Overview, All Tasks, Users, Taskers, Payments, Manual Payouts — but no Pickup-Drop section
-- Admin has no visibility or control over Pickup-Drop tasks
-- Homepage has a "How Task Turtle Works" section for Daily Tasks but no section for Pickup-Drop
-- Footer shows copyright only, no founder credit
-- backend.ts serializers (from_candid_record_n16, to_candid_record_n24) were missing aadharOrStudentId field — FIXED
-- backend.did.js and declarations now include PickupDrop types/methods — FIXED
-- main.mo now has getAllPickupDropTasks, getAllPickupDropActiveTasks, adminCancelPickupDropTask — ADDED
+
+Task Turtle is a fully deployed hyper-local task marketplace. Key existing features:
+- PostTaskForm uses Cashfree payment modal with a flat ₹4 platform fee calculation
+- Find Tasks tab (Daily + Pickup-Drop) shows amount + tip but no tasker-specific earning breakdown
+- TaskCard (My Tasks) shows amount/tip but no full payment breakdown
+- Tasker Dashboard shows available/active tasks with amount+tip total, no clear earning display
+- AdminDashboard has 7 tabs; All Tasks tab shows task detail dialog with customer/tasker info but NO eye icon profile viewer on table rows
+- Admin dashboard already shows UPI/Aadhar in detail dialogs, but NOT in taskers table directly
+- Footer in LandingPage shows "Founder: Thakur Ayush Singh" but not "Ayush Singh Rajput" in green
+- No task card image system exists (no keyword-to-image matching)
+- Task cards have no image thumbnail
+- Tasker Dashboard sections not tab-based; headings not bold/highlighted
 
 ## Requested Changes (Diff)
 
 ### Add
-- Admin dashboard: New 7th tab "Pickup-Drop" with:
-  - Table of all Pickup-Drop tasks (ID, pickup loc, drop loc, product worth, tasker fee, status, posted by, created date)
-  - Row click → full detail modal showing all fields including tasker UPI ID and Aadharcard details
-  - Admin can cancel any Pickup-Drop task (with confirmation)
-  - Manual payout section for Pickup-Drop: shows tasker name, UPI ID, amount to pay, mark as paid
-  - Search and filter by status
-- Homepage: "How Pickup-Drop Works" section with 6 animated step cards:
-  1. User Posts Task — user fills pickup details, drop details, product worth (security amount)
-  2. Tasker Finds Task — tasker browses Pickup-Drop section in Find Task
-  3. Tasker Accepts & Pays Deposit — tasker pays product worth as security deposit
-  4. Tasker Gets Full Details — after payment, complete pickup/drop contact info revealed
-  5. Tasker Completes Delivery — tasker picks up, delivers, verifies with OTP
-  6. Payout Released — Task Turtle transfers full profit + security deposit back to tasker
-- Footer: Add "Founder of Task Turtle: Thakur Ayush Singh" text
+- Payment breakdown section in PostTaskForm above Pay button: Amount, Tasker Fee (tip), Boost (if selected), Platform Fee, Total Payable
+- Platform fee calculation rules: ₹0-99→₹4, ₹100-299→₹7, ₹300-500→₹10
+- Payment breakdown in TaskCard (My Tasks view): show Amount, Tasker Fee, Boost, Platform Fee, Total Paid
+- Task Card Image System: keyword matching from title/description to show relevant product image; fallback to TaskTurtle logo
+- Tasker earning display on all task cards (Find Tasks, Available Tasks): "Buy Item: ₹X" + "Earn: ₹Y (₹A fee + ₹B boost)" or "Earn: ₹Y" — no platform fee shown
+- Validation: minimum tasker fee ₹10; boost options ₹10 or ₹20 only
+- Tasker Dashboard: sticky tabs layout on mobile with bold headings, card/tab-based sections
+- Admin dashboard: Show UPI ID in Taskers tab table rows ("Not Provided" if empty)
+- Admin dashboard: eye 👁 icon in All Tasks table next to "Posted By" and "Accepted By" columns — clicking opens full user profile modal
+- Footer update: replace/augment with "Founder of TaskTurtle" and "Ayush Singh Rajput" in green color, center aligned
 
 ### Modify
-- Profile save: aadharOrStudentId now properly serialized (already fixed in backend.ts)
-- Admin users/taskers profile modal: ensure UPI ID and Aadharcard details are visible
+- PostTaskForm: change "tip" field to "Tasker Fee" (minimum ₹10 validation); add Boost select (₹0/₹10/₹20); switch from Cashfree to Razorpay; update total calculation with tiered platform fee
+- FindTaskCard: replace amount display with earning-focused view ("Buy Item: ₹X", "Earn: ₹Y")
+- AvailableTaskCard in TaskerDashboard: same earning-focused display
+- TaskCard (My Tasks): add payment breakdown section
+- TaskerDashboard: wrap Available Tasks and My Active Tasks sections in tabs/cards with sticky behavior on mobile; bold headings with emoji
+- AdminDashboard All Tasks tab: add eye icon buttons in table rows for user profile quick-view
+- AdminDashboard Taskers tab: add UPI ID column
+- LandingPage footer: update to "Founder of TaskTurtle" + "Ayush Singh Rajput" in green
 
 ### Remove
-- Nothing removed
+- Cashfree payment modal usage in PostTaskForm (replace with Razorpay)
+- Old flat ₹4 platform fee calculation (replace with tiered)
+- "Made with Caffeine AI" if still present anywhere in footer
 
 ## Implementation Plan
-1. Add `useAdminAllPickupDropTasks` hook in useQueries.ts fetching `getAllPickupDropTasks()`
-2. Add `useAdminCancelPickupDropTask` mutation hook calling `adminCancelPickupDropTask()`
-3. Add PickupDropTab component inside AdminDashboard.tsx with table, detail modal, cancel, manual payout
-4. Add 7th tab "Pickup-Drop" to TABS array in AdminDashboard.tsx
-5. Add PickupDropTaskStatus badge helper
-6. Add "How Pickup-Drop Works" section to LandingPage.tsx (after existing "How Task Turtle Works" section)
-7. Update footer in LandingPage.tsx to include founder text
+
+1. **Payment Breakdown + Razorpay in PostTaskForm**: 
+   - Rename "tip" to "Tasker Fee"; add taskerFeeINR state with ₹10 min validation
+   - Add Boost select: none/₹10/₹20
+   - Compute platform fee: amount 0-99→4, 100-299→7, 300-500→10
+   - total = amount + taskerFee + boost + platformFee
+   - Show breakdown card above submit button
+   - Change submit to open Razorpay modal (rzp_live_SRNbTwyEmzQSvO) instead of Cashfree
+   - On payment success → createTask with taskerFee as tip field
+
+2. **Task Card Image System**:
+   - Create `getTaskImage(title, description)` utility that maps keywords to image URLs
+   - Keywords: banana, milk, medicine, grocery, bread, vegetables, fruits, water, rice, etc.
+   - Use emoji-based or colored placeholder if no image available
+   - Apply to: FindTaskCard, AvailableTaskCard, TaskCard, MiniPickupDropCard
+   - Image shown on top of card on mobile, rounded corners
+
+3. **Tasker Earning Display**:
+   - On task cards in Find Tasks / Available Tasks: show "Buy Item: ₹X" and "Earn: ₹Y" where Y = tasker fee (tip field)
+   - If boost: "Earn: ₹Y (₹A fee + ₹B boost)"
+   - Do NOT show platform fee or commission
+
+4. **Post-Task Payment Breakdown in My Tasks**:
+   - In TaskCard: show Amount, Tasker Fee, Boost, Platform Fee, Total Paid
+   - Derive from task.amount and task.tip
+
+5. **Tasker Dashboard UI**:
+   - Wrap Available Tasks + My Active Tasks into sticky tab buttons on mobile
+   - Bold headings with 📋 and 🚀 emoji
+   - Card/tab layout with visual distinction
+
+6. **Admin: UPI in Taskers Tab**:
+   - Add UPI ID column to taskers table
+   - Show value or "Not Provided" badge
+
+7. **Admin: Eye Icon Profile View in All Tasks**:
+   - Add Eye icon button in All Tasks table next to Posted By and Accepted By
+   - Clicking opens a UserProfileModal with: Name, Phone, Email, UPI ID, Aadhar details, task stats
+
+8. **Footer Update**:
+   - Center-aligned footer section
+   - "Founder of TaskTurtle" label
+   - "Ayush Singh Rajput" in green (text-green-vivid)
+
+9. **Responsiveness**:
+   - All new components must use responsive grid/flex
+   - min-w-0, truncate on text
+   - Touch-friendly button sizing (min h-11)
