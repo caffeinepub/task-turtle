@@ -252,6 +252,7 @@ export interface backendInterface {
     getPayoutRecords(): Promise<Array<PayoutRecord>>;
     markPayoutPaid(taskId: bigint, method: PayoutMethod): Promise<boolean>;
     verifyOtp(taskId: bigint, otp: bigint): Promise<boolean>;
+    fetchYouTubeRss(channelId: string): Promise<string>;
 }
 import type { PublicUserProfile as _PublicUserProfile, StripeSessionStatus as _StripeSessionStatus, Task as _Task, TaskResult as _TaskResult, TaskStatus as _TaskStatus, TaskUpdateRequest as _TaskUpdateRequest, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -719,6 +720,13 @@ export class Backend implements backendInterface {
             try { return await actor.markPayoutPaid(arg0, candid_method); }
             catch (e) { this.processError(e); throw new Error("unreachable"); }
         } else { return await actor.markPayoutPaid(arg0, candid_method); }
+    }
+    async fetchYouTubeRss(channelId: string): Promise<string> {
+        const actor = this.actor as any;
+        if (this.processError) {
+            try { return await actor.fetchYouTubeRss(channelId); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await actor.fetchYouTubeRss(channelId); }
     }
 }
 function from_candid_PublicUserProfile_n15(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _PublicUserProfile): PublicUserProfile {

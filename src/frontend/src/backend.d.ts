@@ -239,4 +239,5 @@ export interface backendInterface {
     getAllPickupDropTasks(): Promise<Array<PickupDropTask>>;
     getAllPickupDropActiveTasks(): Promise<Array<PickupDropActiveTask>>;
     adminCancelPickupDropTask(taskId: bigint): Promise<boolean>;
+    fetchYouTubeRss(channelId: string): Promise<string>;
 }

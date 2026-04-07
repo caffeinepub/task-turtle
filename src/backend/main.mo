@@ -1036,5 +1036,12 @@ actor {
   };
 
 
+
+  // Fetch YouTube RSS feed and return raw XML
+  public func fetchYouTubeRss(channelId : Text) : async Text {
+    let url = "https://www.youtube.com/feeds/videos.xml?channel_id=" # channelId;
+    await OutCall.httpGetRequest(url, [], transform);
+  };
+
 };
 
