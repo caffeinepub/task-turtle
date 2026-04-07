@@ -7,6 +7,7 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
+import InstallPWA from "./components/InstallPWA";
 import Navbar from "./components/Navbar";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useEnsureProfile } from "./hooks/useQueries";
@@ -19,7 +20,7 @@ import ProfilePage from "./pages/ProfilePage";
 import TaskerDashboard from "./pages/TaskerDashboard";
 import WalletPage from "./pages/WalletPage";
 
-// ─── Loading state ────────────────────────────────────────────────────────────────────
+// ─── Loading state ─────────────────────────────────────────────────────────────────────────────────
 
 function PageLoader() {
   return (
@@ -32,7 +33,7 @@ function PageLoader() {
   );
 }
 
-// ─── Auth guard component ─────────────────────────────────────────────────────────────
+// ─── Auth guard component ──────────────────────────────────────────────────────────────────────
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { identity, isInitializing } = useInternetIdentity();
@@ -41,14 +42,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// ─── Profile bootstrap — silently registers user on first login ──────────────────────
+// ─── Profile bootstrap — silently registers user on first login ────────────────────────────────────
 
 function ProfileBootstrap() {
   useEnsureProfile();
   return null;
 }
 
-// ─── App layout wrapper for protected pages ─────────────────────────────────────────
+// ─── App layout wrapper for protected pages ──────────────────────────────────────────────────────────
 
 function AppLayout() {
   return (
@@ -62,7 +63,7 @@ function AppLayout() {
   );
 }
 
-// ─── Root route ─────────────────────────────────────────────────────────────────────
+// ─── Root route ────────────────────────────────────────────────────────────────────────────────────
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -77,12 +78,13 @@ const rootRoute = createRootRoute({
           },
         }}
       />
+      <InstallPWA />
       <Outlet />
     </>
   ),
 });
 
-// ─── Public routes ──────────────────────────────────────────────────────────────────
+// ─── Public routes ───────────────────────────────────────────────────────────────────────────────
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -96,7 +98,7 @@ const loginRoute = createRoute({
   component: LoginPage,
 });
 
-// ─── Protected layout route ──────────────────────────────────────────────────────────
+// ─── Protected layout route ────────────────────────────────────────────────────────────────────
 
 const protectedLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -144,7 +146,7 @@ const pickupDropRoute = createRoute({
   component: PickupDropPage,
 });
 
-// ─── Router ─────────────────────────────────────────────────────────────────────────
+// ─── Router ───────────────────────────────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
   indexRoute,

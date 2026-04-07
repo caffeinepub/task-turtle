@@ -1,11 +1,142 @@
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Primary Meta -->
+    <title>Task Turtle - Smart Task Marketplace</title>
+    <meta name="description" content="Task Turtle is a hyper-local task marketplace. Post tasks, find taskers nearby, and get things done instantly." />
+    <meta name="keywords" content="task marketplace, hyper local, tasker, gigs, delivery, Task Turtle" />
+    <meta name="author" content="Thakur Ayush Singh" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Theme Colors -->
+    <meta name="theme-color" content="#00ff88" />
+    <meta name="msapplication-TileColor" content="#000000" />
+    <meta name="msapplication-TileImage" content="/assets/generated/pwa-icon-192.dim_192x192.png" />
+
+    <!-- Apple PWA Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Task Turtle" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="/assets/generated/pwa-icon-192.dim_192x192.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/assets/generated/pwa-icon-192.dim_192x192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/assets/generated/pwa-icon-512.dim_512x512.png" />
+
+    <!-- Apple Splash Screens -->
+    <meta name="apple-touch-startup-image" content="/assets/generated/pwa-icon-512.dim_512x512.png" />
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/generated/pwa-icon-192.dim_192x192.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/generated/pwa-icon-192.dim_192x192.png" />
+    <link rel="shortcut icon" href="/assets/generated/pwa-icon-192.dim_192x192.png" />
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Task Turtle - Smart Task Marketplace" />
+    <meta property="og:description" content="Post tasks, find nearby taskers, and get things done instantly with Task Turtle." />
+    <meta property="og:image" content="/assets/generated/task-turtle-hero.dim_1200x600.jpg" />
+    <meta property="og:url" content="/" />
+    <meta property="og:site_name" content="Task Turtle" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Task Turtle - Smart Task Marketplace" />
+    <meta name="twitter:description" content="Post tasks, find nearby taskers, and get things done instantly." />
+    <meta name="twitter:image" content="/assets/generated/task-turtle-hero.dim_1200x600.jpg" />
+
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://www.googleapis.com" />
+    <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
+
+    <!-- Splash screen background color for instant paint -->
+    <style>
+      html, body {
+        background-color: #000000;
+        margin: 0;
+        padding: 0;
+      }
+      #splash {
+        position: fixed;
+        inset: 0;
+        background: #000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease, visibility 0.5s ease;
+      }
+      #splash.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .splash-logo {
+        width: 96px;
+        height: 96px;
+        border-radius: 24px;
+        overflow: hidden;
+        box-shadow: 0 0 40px rgba(0, 255, 136, 0.6), 0 0 80px rgba(0, 255, 136, 0.2);
+        animation: splash-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        opacity: 0;
+        transform: scale(0.5);
+      }
+      .splash-logo img { width: 100%; height: 100%; object-fit: cover; }
+      @keyframes splash-pop {
+        to { opacity: 1; transform: scale(1); }
+      }
+      .splash-title {
+        margin-top: 20px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 28px;
+        font-weight: 800;
+        color: #00ff88;
+        letter-spacing: -0.5px;
+        opacity: 0;
+        animation: splash-fade 0.5s ease 0.3s forwards;
+      }
+      .splash-sub {
+        margin-top: 8px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 14px;
+        color: rgba(255,255,255,0.4);
+        opacity: 0;
+        animation: splash-fade 0.5s ease 0.5s forwards;
+      }
+      @keyframes splash-fade {
+        to { opacity: 1; }
+      }
+    </style>
   </head>
   <body>
+    <!-- Splash Screen -->
+    <div id="splash">
+      <div class="splash-logo">
+        <img src="/assets/generated/pwa-icon-192.dim_192x192.png" alt="Task Turtle" />
+      </div>
+      <div class="splash-title">Task Turtle</div>
+      <div class="splash-sub">Smart Task Marketplace</div>
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Hide splash screen once app is loaded
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          var splash = document.getElementById('splash');
+          if (splash) splash.classList.add('hidden');
+        }, 1200);
+      });
+    </script>
   </body>
 </html>
